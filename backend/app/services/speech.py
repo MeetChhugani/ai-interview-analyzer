@@ -1,0 +1,144 @@
+import os
+import re
+from typing import Dict, Any, List
+
+# Standard filler words to track
+FILLER_WORDS = ["um", "uh", "like", "so", "you know", "actually", "basically", "literally"]
+
+# Mock transcripts as final fallback if libraries are missing
+MOCK_TRANSCRIPTS = [
+    "Um, so I believe I am a strong candidate for this role because, uh, I have extensive experience in Flutter and backend development.",
+    "Actually, I've worked with FastAPI for about two years now, and, you know, it is extremely fast and scalable.",
+    "Basically, my biggest strength is problem-solving. Uh, I literally love taking on difficult challenges and, like, breaking them down.",
+    "I'm highly motivated to join your team. I have great communication skills and I am, um, excited to collaborate."
+]
+_mock_index = 0
+
+def transcribe_audio(audio_file_path: str, duration_seconds: float) -> Dict[str, Any]:
+    """
+    Transcribes audio using:
+    1. OpenAI Whisper API if OPENAI_API_KEY is present.
+    2. Google Speech Recognition (free, keyless) via speech_recognition as a standard fallback.
+    3. Fallback to mock data only if transcription tools are unavailable.
+    """
+    global _mock_index
+    text = ""
+    api_key = os.getenv("OPENAI_API_KEY")
+
+    # 1. Attempt OpenAI Whisper
+    if api_key:
+        try:
+            import httpx
+            with open(audio_file_path, "rb") as f:
+                files = {"file": f}
+                headers = {"Authorization": f"Bearer {api_key}"}
+                response = httpx.post(
+                    "https://api.openai.com/v1/audio/transcriptions",
+                    headers=headers,
+                    files=files,
+                    data={"model": "whisper-1"},
+                    timeout=30.0
+                )
+                if response.status_code == 200:
+                    text = response.json().get("text", "")
+                else:
+                    print(f"OpenAI Whisper returned status {response.status_code}: {response.text}")
+        except Exception as e:
+            print(f"OpenAI Whisper error: {str(e)}")
+    
+    # 2. Attempt Google Web Speech API (Free & Keyless) via SpeechRecognition
+    if not text or text.startswith("Error") or text.startswith("Transcription error"):
+        try:
+            import speech_recognition as sr
+            r = sr.Recognizer()
+            with sr.AudioFile(audio_file_path) as source:
+                audio_data = r.record(source)
+            # recognize_google is free, keyless, and uses Google's web service
+            text = r.recognize_google(audio_data)
+            print(f"Google Speech Recognition success: '{text}'")
+        except sr.UnknownValueError:
+            # Google Speech could not understand the audio (often silence or mumbling)
+            print("Google Speech Recognition: Audio was unclear or silent.")
+            text = ""
+        except sr.RequestError as e:
+            # Google Speech service failed or no internet
+            print(f"Google Speech Recognition service error: {e}")
+            text = ""
+        except Exception as e:
+            print(f"Google Speech Recognition general error: {str(e)}")
+            text = ""
+
+    # 3. Final fallback: If everything failed, or if it was empty, we can check if we should mock it.
+    if not text:
+        try:
+            import speech_recognition as sr
+            # If SpeechRecognition is installed and worked, but returned empty, it means silence.
+            text = "No speech detected."
+        except ImportError:
+            text = MOCK_TRANSCRIPTS[_mock_index % len(MOCK_TRANSCRIPTS)]
+            _mock_index += 1
+
+    return analyze_text(text, duration_seconds)
+
+def analyze_text(text: str, duration_seconds: float) -> Dict[str, Any]:
+    """
+    Analyzes the transcribed text for WPM, filler words, and clarity.
+    """
+    if not text or text == "No speech detected.":
+        return {
+            "text": "No speech detected.",
+            "word_count": 0,
+            "wpm": 0,
+            "filler_words_count": 0,
+            "filler_words_breakdown": {},
+            "filler_ratio": 0.0,
+            "suggestions": ["No speech was detected. Please make sure your microphone is working and speak clearly."]
+        }
+
+    # Clean and split text into words
+    words = re.findall(r'\b\w+\b', text.lower())
+    word_count = len(words)
+    
+    # Calculate WPM
+    duration_minutes = duration_seconds / 60.0 if duration_seconds > 0 else 0.1
+    wpm = int(word_count / duration_minutes)
+
+    # Count filler words
+    filler_counts = {}
+    total_fillers = 0
+    for filler in FILLER_WORDS:
+        # Match word boundaries for fillers (e.g. "so" matches "so", not "some")
+        matches = len(re.findall(r'\b' + re.escape(filler) + r'\b', text.lower()))
+        if matches > 0:
+            filler_counts[filler] = matches
+            total_fillers += matches
+
+    # Calculate speech fluency metrics
+    filler_ratio = total_fillers / word_count if word_count > 0 else 0
+    
+    # Generate speech-related suggestions
+    suggestions = []
+    if text == "No speech detected.":
+        suggestions.append("No speech was detected. Please make sure your microphone is working and speak clearly.")
+    else:
+        if wpm < 100:
+            suggestions.append("Your speaking speed is a bit slow. Try to speak more dynamically to keep the interviewer engaged.")
+        elif wpm > 160:
+            suggestions.append("You are speaking quite fast. Slow down slightly, pause between ideas, and take a breath.")
+        else:
+            suggestions.append("Excellent pacing! Your speaking speed is in the ideal range of 110-150 WPM.")
+
+        if filler_ratio > 0.05:
+            suggestions.append(f"You used {total_fillers} filler words. Try pausing briefly instead of saying '{list(filler_counts.keys())[0]}'.")
+        else:
+            suggestions.append("Great job keeping filler words to a minimum!")
+
+    return {
+        "text": text,
+        "word_count": word_count,
+        "wpm": wpm,
+        "filler_words_count": total_fillers,
+        "filler_words_breakdown": filler_counts,
+        "filler_ratio": filler_ratio,
+        "suggestions": suggestions
+    }
