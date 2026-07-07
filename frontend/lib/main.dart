@@ -1,20 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'services/profile_store.dart';
+import 'services/auth_store.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/interview_screen.dart';
 import 'screens/report_screen.dart';
+import 'screens/login_screen.dart';
+import 'screens/signup_screen.dart';
+import 'screens/forgot_password_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final isLoggedIn = await AuthStore.isLoggedIn();
   final profile = await ProfileStore.loadProfile();
-  runApp(InterviewAnalyzerApp(hasProfile: profile != null));
+  runApp(InterviewAnalyzerApp(isLoggedIn: isLoggedIn, hasProfile: profile != null));
 }
 
 class InterviewAnalyzerApp extends StatelessWidget {
+  final bool isLoggedIn;
   final bool hasProfile;
-  const InterviewAnalyzerApp({super.key, required this.hasProfile});
+  const InterviewAnalyzerApp({super.key, required this.isLoggedIn, required this.hasProfile});
 
   @override
   Widget build(BuildContext context) {
@@ -56,8 +62,11 @@ class InterviewAnalyzerApp extends StatelessWidget {
       title: 'AI Smart Interview Analyzer',
       debugShowCheckedModeBanner: false,
       theme: themeData,
-      initialRoute: hasProfile ? '/home' : '/',
+      initialRoute: isLoggedIn ? (hasProfile ? '/home' : '/') : '/login',
       routes: {
+        '/login': (context) => const LoginScreen(),
+        '/signup': (context) => const SignupScreen(),
+        '/forgot-password': (context) => const ForgotPasswordScreen(),
         '/': (context) => const OnboardingScreen(),
         '/home': (context) => const HomeScreen(),
       },

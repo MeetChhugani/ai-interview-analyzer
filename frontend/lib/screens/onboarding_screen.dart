@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/profile_store.dart';
+import '../services/auth_store.dart';
+import '../services/api_service.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -18,7 +20,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   
   String _education = 'B.Tech - Computer Science';
   String _experience = '2 Years';
-  String _currentRole = 'Flutter Developer';
+  String _currentRole = 'Software Engineer';
+  final TextEditingController _customRoleController = TextEditingController();
   
   bool _isResumeUploaded = false;
   String _resumeFileName = '';
@@ -35,6 +38,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
+    _customRoleController.dispose();
     super.dispose();
   }
 
@@ -59,13 +63,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Future<void> _finishOnboarding() async {
+    final finalRole = _currentRole == 'Custom / Other...' 
+        ? (_customRoleController.text.trim().isNotEmpty ? _customRoleController.text.trim() : 'Custom Role')
+        : _currentRole;
+
     final profile = {
       'name': _nameController.text.trim(),
       'email': _emailController.text.trim(),
       'phone': _phoneController.text.trim(),
       'education': _education,
       'experience': _experience,
-      'currentRole': _currentRole,
+      'currentRole': finalRole,
       'resumeName': _isResumeUploaded ? _resumeFileName : 'No resume uploaded',
       'expLevel': _expLevel,
       'interviewType': _interviewType,
@@ -73,6 +81,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       'language': _prefLanguage,
     };
     await ProfileStore.saveProfile(profile);
+
+    // Sync with backend database
+    try {
+      final authUser = await AuthStore.getAuthUser();
+      if (authUser != null && authUser['id'] != null) {
+        final apiService = ApiService();
+        await apiService.updateProfile(authUser['id'], profile);
+        
+        // Update cached auth user values locally
+        authUser['education'] = _education;
+        authUser['experience'] = _experience;
+        authUser['current_role'] = finalRole;
+        authUser['skills'] = _selectedSkills;
+        await AuthStore.saveAuthUser(authUser);
+      }
+    } catch (e) {
+      print('Failed to sync profile with server: $e');
+    }
+
     if (mounted) {
       Navigator.pushReplacementNamed(context, '/home');
     }
@@ -400,15 +427,30 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             _buildDropdownField(
               value: _currentRole,
               items: [
-                'Flutter Developer',
                 'Software Engineer',
                 'Product Manager',
-                'HR Manager',
                 'Data Analyst',
-                'Android Developer'
+                'HR Manager',
+                'Android Developer',
+                'Investment Banker',
+                'Sales Representative',
+                'Marketing Specialist',
+                'Nurse',
+                'Doctor',
+                'Research Scientist',
+                'Customer Support Specialist',
+                'Project Manager',
+                'Teacher / Educator',
+                'Hotel Manager',
+                'Custom / Other...'
               ],
               onChanged: (val) => setState(() => _currentRole = val!),
             ),
+            if (_currentRole == 'Custom / Other...') ...[
+              const SizedBox(height: 16),
+              _buildFieldLabel('Enter Custom Job Title'),
+              _buildTextField(_customRoleController, 'e.g. Mechanical Engineer, Pilot, Chef'),
+            ],
           ],
         );
       case 4: // Setup 3: Resume (Screen 6)

@@ -22,12 +22,13 @@ class ApiService {
   ApiService({String? baseUrl}) : _customBaseUrl = baseUrl;
 
   /// Starts a new evaluation session for a specific job category.
-  Future<Map<String, dynamic>> createSession(String category, {List<String>? customQuestions}) async {
+  Future<Map<String, dynamic>> createSession(String category, {List<String>? customQuestions, String? userId}) async {
     final url = Uri.parse('$baseUrl/session');
     try {
       final body = {
         'category': category,
         if (customQuestions != null) 'custom_questions': customQuestions,
+        if (userId != null) 'user_id': userId,
       };
       final response = await http.post(
         url,
@@ -124,6 +125,101 @@ class ApiService {
       }
     } catch (e) {
       throw Exception('Network error fetching report: $e');
+    }
+  }
+
+  // --- AUTHENTICATION & HISTORY API METHODS ---
+
+  Future<Map<String, dynamic>> signup(String email, String name, String password) async {
+    final url = Uri.parse('$baseUrl/auth/signup');
+    final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email, 'name': name, 'password': password}),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      final error = jsonDecode(response.body);
+      throw Exception(error['detail'] ?? 'Failed to sign up');
+    }
+  }
+
+  Future<Map<String, dynamic>> login(String email, String password) async {
+    final url = Uri.parse('$baseUrl/auth/login');
+    final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email, 'password': password}),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      final error = jsonDecode(response.body);
+      throw Exception(error['detail'] ?? 'Invalid credentials');
+    }
+  }
+
+  Future<Map<String, dynamic>> forgotPassword(String email) async {
+    final url = Uri.parse('$baseUrl/auth/forgot-password');
+    final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email}),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      final error = jsonDecode(response.body);
+      throw Exception(error['detail'] ?? 'Failed to generate OTP');
+    }
+  }
+
+  Future<Map<String, dynamic>> resetPassword(String email, String otp, String newPassword) async {
+    final url = Uri.parse('$baseUrl/auth/reset-password');
+    final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email, 'otp': otp, 'new_password': newPassword}),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      final error = jsonDecode(response.body);
+      throw Exception(error['detail'] ?? 'OTP verification failed');
+    }
+  }
+
+  Future<Map<String, dynamic>> getProfile(String userId) async {
+    final url = Uri.parse('$baseUrl/auth/profile/$userId');
+    final response = await http.get(url);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Profile not found');
+    }
+  }
+
+  Future<void> updateProfile(String userId, Map<String, dynamic> profileData) async {
+    final url = Uri.parse('$baseUrl/auth/profile/$userId');
+    final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(profileData),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to save profile on server');
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getHistoryFromServer(String userId) async {
+    final url = Uri.parse('$baseUrl/history/$userId');
+    final response = await http.get(url);
+    if (response.statusCode == 200) {
+      final List<dynamic> list = jsonDecode(response.body);
+      return list.cast<Map<String, dynamic>>();
+    } else {
+      throw Exception('Failed to fetch history');
     }
   }
 }

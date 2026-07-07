@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../services/profile_store.dart';
+import '../services/auth_store.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -53,7 +54,20 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   Future<void> _loadProfileAndHistory() async {
     final profile = await ProfileStore.loadProfile();
-    final history = await ProfileStore.loadHistory();
+    final user = await AuthStore.getAuthUser();
+    
+    List<Map<String, dynamic>> history = [];
+    if (user != null && user['id'] != null) {
+      try {
+        history = await _apiService.getHistoryFromServer(user['id']);
+      } catch (e) {
+        print('Error loading history from server: $e');
+        history = await ProfileStore.loadHistory();
+      }
+    } else {
+      history = await ProfileStore.loadHistory();
+    }
+
     if (mounted) {
       setState(() {
         _userProfile = profile;
@@ -68,7 +82,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     });
 
     try {
-      final sessionData = await _apiService.createSession(category);
+      final user = await AuthStore.getAuthUser();
+      final userId = user?['id'];
+      
+      final sessionData = await _apiService.createSession(category, userId: userId);
       final sessionId = sessionData['session_id'];
 
       if (mounted) {
@@ -828,13 +845,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     elevation: 0,
                   ),
                   onPressed: () async {
+                    await AuthStore.clearAuthUser();
                     await ProfileStore.clearProfile();
                     await ProfileStore.clearHistory();
                     if (mounted) {
-                      Navigator.pushReplacementNamed(context, '/');
+                      Navigator.pushReplacementNamed(context, '/login');
                     }
                   },
-                  child: const Text('Reset Application & Profile', style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: const Text('Log Out Account', style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ],
             ),

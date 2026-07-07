@@ -4,6 +4,31 @@ from typing import List, Dict, Any, Optional
 class SessionCreate(BaseModel):
     category: str = Field(..., example="Software Engineer")
     custom_questions: Optional[List[str]] = Field(default=None, example=["Tell me about yourself"])
+    user_id: Optional[str] = Field(default=None, example="user-uuid-123")
+
+class UserSignup(BaseModel):
+    email: str
+    name: str
+    password: str
+
+class UserLogin(BaseModel):
+    email: str
+    password: str
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    email: str
+    otp: str
+    new_password: str
+
+class ProfileUpdate(BaseModel):
+    name: str
+    education: str
+    experience: str
+    currentRole: str
+    skills: List[str]
 
 class SessionResponse(BaseModel):
     session_id: str
