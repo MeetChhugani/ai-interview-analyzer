@@ -46,6 +46,7 @@ class _InterviewScreenState extends State<InterviewScreen> with TickerProviderSt
   FlutterTts? _flutterTts;
   Timer? _ttsBackupTimer;
   bool _isVoiceRecordingActive = false;
+  bool _isSpeakingModeActive = false;
 
   // Real-time HUD and Alert states
   String? _currentAlert;
@@ -155,11 +156,9 @@ class _InterviewScreenState extends State<InterviewScreen> with TickerProviderSt
       });
       _flutterTts!.setCompletionHandler(() {
         _cancelTtsBackupTimer();
-        _startRecordingForQuestion();
       });
       _flutterTts!.setErrorHandler((msg) {
         _cancelTtsBackupTimer();
-        _startRecordingForQuestion();
       });
       
       if (widget.questions.isNotEmpty) {
@@ -167,7 +166,6 @@ class _InterviewScreenState extends State<InterviewScreen> with TickerProviderSt
       }
     } catch (e) {
       _cancelTtsBackupTimer();
-      _startRecordingForQuestion();
     }
   }
 
@@ -182,13 +180,12 @@ class _InterviewScreenState extends State<InterviewScreen> with TickerProviderSt
       if (estimatedSeconds > 15) estimatedSeconds = 15;
       
       _ttsBackupTimer = Timer(Duration(seconds: estimatedSeconds), () {
-        _startRecordingForQuestion();
+        // Backup timer complete
       });
 
       await _flutterTts!.speak(text);
     } catch (e) {
       _cancelTtsBackupTimer();
-      _startRecordingForQuestion();
     }
   }
 
@@ -254,6 +251,7 @@ class _InterviewScreenState extends State<InterviewScreen> with TickerProviderSt
 
   Future<void> _startRecordingForQuestion() async {
     if (!mounted || !_isRecording) return;
+    if (!_isSpeakingModeActive) return;
     if (_isVoiceRecordingActive) return;
     _isVoiceRecordingActive = true;
     
@@ -325,16 +323,19 @@ class _InterviewScreenState extends State<InterviewScreen> with TickerProviderSt
   Future<void> _triggerChunkUploadAndNext() async {
     final activeIndex = _currentQuestionIndex;
     _audioUploadTimer?.cancel();
-    final path = await _audioRecorder.stop();
-
-    if (path != null) {
-      _apiService.sendAudio(widget.sessionId, path, 5.0, activeIndex).catchError((e) {
-        return <String, dynamic>{};
-      });
+    
+    if (_isSpeakingModeActive) {
+      final path = await _audioRecorder.stop();
+      if (path != null) {
+        _apiService.sendAudio(widget.sessionId, path, 5.0, activeIndex).catchError((e) {
+          return <String, dynamic>{};
+        });
+      }
     }
 
     setState(() {
       _currentQuestionIndex++;
+      _isSpeakingModeActive = false; // Reset speaking mode for the next question
     });
 
     if (_currentQuestionIndex < widget.questions.length) {
@@ -343,11 +344,22 @@ class _InterviewScreenState extends State<InterviewScreen> with TickerProviderSt
   }
 
   Future<void> _endInterview() async {
+    _audioUploadTimer?.cancel();
+    if (_isSpeakingModeActive) {
+      final path = await _audioRecorder.stop();
+      if (path != null) {
+        _apiService.sendAudio(widget.sessionId, path, 5.0, _currentQuestionIndex).catchError((e) {
+          return <String, dynamic>{};
+        });
+      }
+    }
+
     setState(() {
       _isRecording = false;
+      _isSpeakingModeActive = false;
       _uiStatus = InterviewUIStatus.analyzing;
     });
-
+    
     _sessionTimer?.cancel();
     _frameUploadTimer?.cancel();
     _audioUploadTimer?.cancel();
@@ -665,6 +677,41 @@ class _InterviewScreenState extends State<InterviewScreen> with TickerProviderSt
                   ),
                   const SizedBox(height: 18),
 
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _isSpeakingModeActive ? const Color(0xFFD8B28A) : const Color(0xFF0D3A31).withOpacity(0.08),
+                      foregroundColor: _isSpeakingModeActive ? Colors.white : const Color(0xFF0D3A31),
+                      minimumSize: const Size(double.infinity, 56),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(28),
+                        side: _isSpeakingModeActive ? BorderSide.none : const BorderSide(color: Color(0xFF0D3A31), width: 1.5),
+                      ),
+                      elevation: 0,
+                    ),
+                    icon: Icon(
+                      _isSpeakingModeActive ? Icons.mic_rounded : Icons.mic_none_rounded,
+                      color: _isSpeakingModeActive ? Colors.white : const Color(0xFF0D3A31),
+                    ),
+                    onPressed: () async {
+                      if (_isSpeakingModeActive) return; // Already recording
+                      await _flutterTts?.stop();
+                      _cancelTtsBackupTimer();
+                      setState(() {
+                        _isSpeakingModeActive = true;
+                      });
+                      await _startRecordingForQuestion();
+                    },
+                    label: Text(
+                      _isSpeakingModeActive ? 'RECORDING ANSWER...' : 'TAP TO START SPEAKING',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: _isSpeakingModeActive ? Colors.white : const Color(0xFF0D3A31),
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
                   Row(
                     children: [
                       Expanded(
