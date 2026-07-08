@@ -584,22 +584,8 @@ class _InterviewScreenState extends State<InterviewScreen> with TickerProviderSt
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       _buildLiveIndicatorItem(
-                                        icon: Icons.visibility_rounded,
-                                        label: 'Eye Contact',
-                                        value: _eyeContact ? 'Direct' : 'Looking Away',
-                                        color: _eyeContact ? const Color(0xFF0D3A31) : const Color(0xFFD8B28A),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      _buildLiveIndicatorItem(
-                                        icon: Icons.accessibility_new_rounded,
-                                        label: 'Posture',
-                                        value: '$_postureScore%',
-                                        color: _postureScore >= 80 ? const Color(0xFF0D3A31) : const Color(0xFFD8B28A),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      _buildLiveIndicatorItem(
                                         icon: Icons.emoji_emotions_rounded,
-                                        label: 'Tone/Mood',
+                                        label: 'Mood Tracker',
                                         value: _emotion[0].toUpperCase() + _emotion.substring(1),
                                         color: const Color(0xFF0D3A31),
                                       ),
