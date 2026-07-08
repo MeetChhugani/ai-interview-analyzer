@@ -2,8 +2,8 @@ import os
 import re
 from typing import Dict, Any, List
 
-# Standard filler words to track
-FILLER_WORDS = ["um", "uh", "like", "so", "you know", "actually", "basically", "literally"]
+# Standard filler words to track (focused only on core vocalized ticks to prevent false positive penalties on conversational words)
+FILLER_WORDS = ["um", "uh"]
 
 # Mock transcripts as final fallback if libraries are missing
 MOCK_TRANSCRIPTS = [

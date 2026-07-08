@@ -91,7 +91,8 @@ def calculate_final_scores(session_history: Dict[str, Any]) -> Dict[str, Any]:
         else:
             pacing_score = 55
             
-        filler_score = max(0, 100 - (filler_ratio * 1000)) # 10% filler words reduces score to 0
+        # Gentler, realistic filler words scoring penalty capped at 50 minimum
+        filler_score = max(50, 100 - (filler_ratio * 300))
         communication_score = int((pacing_score * 0.5) + (filler_score * 0.5))
 
     # Behavioral Score is based on: Posture correctness (60%), Gesture appropriate stability (40%)
