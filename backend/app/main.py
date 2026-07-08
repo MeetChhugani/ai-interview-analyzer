@@ -142,6 +142,31 @@ QUESTIONS_DB = {
         "What strategies do you implement to maximize occupancy rates and RevPAR during low seasons?",
         "How do you motivate and manage diverse hospitality staff to maintain high service standards?",
         "Can you describe how you handle a severe guest complaint regarding room cleanliness or service quality?"
+    ],
+    "Chartered Accountant": [
+        "How do you ensure compliance with changing tax laws and financial reporting standards?",
+        "Can you explain the difference between deferred tax assets and deferred tax liabilities?",
+        "How would you handle a situation where you discover a material error in a previously audited financial statement?"
+    ],
+    "Graphic Designer": [
+        "How do you translate a client's vague brand vision into concrete visual design elements?",
+        "Can you walk me through your creative process when working under tight deadlines?",
+        "How do you handle negative feedback from a client on a design you are highly passionate about?"
+    ],
+    "Cybersecurity Analyst": [
+        "How do you investigate and mitigate a suspected data breach or intrusion in progress?",
+        "What is the difference between symmetric and asymmetric encryption, and when is each used?",
+        "How do you balance strong security controls with maintaining user convenience and system performance?"
+    ],
+    "Mechanical Engineer": [
+        "How do you perform stress analysis and choose materials for a component operating in high-temperature environments?",
+        "Can you describe a time when a prototype failed during testing, and how you diagnosed the root cause?",
+        "What is your experience with CAD software and designing for manufacturability (DFM)?"
+    ],
+    "Business Analyst": [
+        "How do you gather, document, and prioritize business requirements from stakeholders with conflicting needs?",
+        "Can you explain the difference between a functional requirement and a non-functional requirement?",
+        "What methodologies (like BPMN or UML) do you use to map out and optimize business processes?"
     ]
 }
 

@@ -82,24 +82,39 @@ def analyze_frame(image_bytes: bytes, session_history: Dict[str, Any]) -> Dict[s
             metrics["face_detected"] = True
             landmarks = face_results.multi_face_landmarks[0].landmark
             
-            # Simple eye contact calculation based on nose and eye corners
-            # Nose bridge (landmark 6), Left eye inner (133), Right eye inner (362)
-            # Nose tip (4), chin (152), left cheek (234), right cheek (454)
+            # Key landmarks for ratios
             nose = np.array([landmarks[4].x, landmarks[4].y, landmarks[4].z])
+            forehead = np.array([landmarks[10].x, landmarks[10].y, landmarks[10].z])
             chin = np.array([landmarks[152].x, landmarks[152].y, landmarks[152].z])
             left_cheek = np.array([landmarks[234].x, landmarks[234].y, landmarks[234].z])
             right_cheek = np.array([landmarks[454].x, landmarks[454].y, landmarks[454].z])
             
-            # Calculate head yaw/pitch
-            dx = right_cheek[0] - left_cheek[0]
-            dy = chin[1] - nose[1]
-            head_yaw = math.atan2(nose[2] - (left_cheek[2] + right_cheek[2])/2.0, dx) * 180 / math.pi
-            head_pitch = math.atan2(nose[2] - (chin[2] + nose[2])/2.0, dy) * 180 / math.pi
+            # Calculate horizontal (Yaw) distance ratios for stability
+            d_left = math.sqrt((nose[0] - left_cheek[0])**2 + (nose[1] - left_cheek[1])**2)
+            d_right = math.sqrt((nose[0] - right_cheek[0])**2 + (nose[1] - right_cheek[1])**2)
+            ratio_h = d_left / d_right if d_right > 0 else 1.0
+            raw_yaw = (ratio_h - 1.0) * 55.0  # Estimated turn angle
+            
+            # Calculate vertical (Pitch) distance ratios
+            d_up = math.sqrt((nose[0] - forehead[0])**2 + (nose[1] - forehead[1])**2)
+            d_down = math.sqrt((nose[0] - chin[0])**2 + (nose[1] - chin[1])**2)
+            ratio_v = d_up / d_down if d_down > 0 else 1.0
+            raw_pitch = (ratio_v - 1.0) * 75.0
+            
+            # Temporal smoothing (EMA) to prevent flickering or sudden jumps
+            prev_yaw = session_history.get("prev_yaw", raw_yaw)
+            prev_pitch = session_history.get("prev_pitch", raw_pitch)
+            
+            head_yaw = 0.8 * prev_yaw + 0.2 * raw_yaw
+            head_pitch = 0.8 * prev_pitch + 0.2 * raw_pitch
+            
+            session_history["prev_yaw"] = head_yaw
+            session_history["prev_pitch"] = head_pitch
             
             metrics["head_angle"] = float(abs(head_yaw) + abs(head_pitch))
             
-            # If head is turned too far, user is looking away
-            if abs(head_yaw) > 15 or abs(head_pitch) > 15:
+            # Evaluate eye contact based on smoothed angles
+            if abs(head_yaw) > 12 or abs(head_pitch) > 12:
                 metrics["eye_contact"] = False
                 metrics["alert"] = "Try to maintain direct eye contact with the camera"
                 metrics["dominant_emotion"] = "anxious"
@@ -114,10 +129,10 @@ def analyze_frame(image_bytes: bytes, session_history: Dict[str, Any]) -> Dict[s
 
     # 3. Process Pose & Posture
     try:
+        raw_posture = 100
         pose_results = pose_detector.process(rgb_frame)
         if pose_results.pose_landmarks:
             pose_landmarks = pose_results.pose_landmarks.landmark
-            # Left shoulder (11), Right shoulder (12)
             ls = pose_landmarks[11]
             rs = pose_landmarks[12]
             
@@ -130,22 +145,27 @@ def analyze_frame(image_bytes: bytes, session_history: Dict[str, Any]) -> Dict[s
                 normalized_tilt = shoulder_tilt / shoulder_width
                 # If tilted more than 10%, warn
                 if normalized_tilt > 0.12:
-                    metrics["posture_score"] = int(max(40, 100 - normalized_tilt * 400))
+                    raw_posture = int(max(40, 100 - normalized_tilt * 400))
                     metrics["alert"] = metrics["alert"] or "Sit straight and level your shoulders"
                 else:
-                    metrics["posture_score"] = 100
+                    raw_posture = 100
         else:
             # If face is detected but shoulders aren't, check framing
             if metrics["face_detected"]:
                 # Evaluate posture using head tilt/angle as a fallback
                 h_ang = metrics.get("head_angle", 0.0)
-                if h_ang < 12.0:
-                    metrics["posture_score"] = int(95 - h_ang * 2)
+                if h_ang < 10.0:
+                    raw_posture = int(95 - h_ang * 2)
                     metrics["alert"] = metrics["alert"] or "Tip: Move 2-3 feet back to analyze hand gestures"
                 else:
-                    metrics["posture_score"] = int(max(50, 85 - h_ang * 3))
+                    raw_posture = int(max(50, 85 - h_ang * 3))
                     metrics["alert"] = metrics["alert"] or "Keep your head level and sit straight"
 
+        # Apply smoothing to posture score
+        prev_posture = session_history.get("prev_posture", raw_posture)
+        posture_score = int(0.8 * prev_posture + 0.2 * raw_posture)
+        session_history["prev_posture"] = posture_score
+        metrics["posture_score"] = posture_score
     except Exception as e:
         print(f"Pose processing error: {e}")
 

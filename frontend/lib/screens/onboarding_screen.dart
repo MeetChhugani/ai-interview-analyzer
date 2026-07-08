@@ -442,6 +442,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 'Project Manager',
                 'Teacher / Educator',
                 'Hotel Manager',
+                'Chartered Accountant',
+                'Graphic Designer',
+                'Cybersecurity Analyst',
+                'Mechanical Engineer',
+                'Business Analyst',
                 'Custom / Other...'
               ],
               onChanged: (val) => setState(() => _currentRole = val!),
