@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 
 class ApiService {
   // Static variable to store the server IP/host (e.g., "127.0.0.1:8000" or "192.168.1.15:8000")
-  static String serverIp = '10.0.2.2:8000';
+  static String serverIp = '127.0.0.1:8000';
 
   // Determine backend URL based on device running the application
   static String get _defaultBaseUrl {
