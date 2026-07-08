@@ -129,30 +129,32 @@ def analyze_frame(image_bytes: bytes, session_history: Dict[str, Any]) -> Dict[s
 
     # 3. Process Pose & Posture
     try:
-        raw_posture = 100
-        pose_results = pose_detector.process(rgb_frame)
-        if pose_results.pose_landmarks:
-            pose_landmarks = pose_results.pose_landmarks.landmark
-            ls = pose_landmarks[11]
-            rs = pose_landmarks[12]
-            
-            # Calculate shoulder tilt (difference in Y-levels)
-            shoulder_tilt = abs(ls.y - rs.y)
-            # Normalization of distance
-            shoulder_width = math.sqrt((ls.x - rs.x)**2 + (ls.y - rs.y)**2)
-            
-            if shoulder_width > 0:
-                normalized_tilt = shoulder_tilt / shoulder_width
-                # If tilted more than 10%, warn
-                if normalized_tilt > 0.12:
-                    raw_posture = int(max(40, 100 - normalized_tilt * 400))
-                    metrics["alert"] = metrics["alert"] or "Sit straight and level your shoulders"
-                else:
-                    raw_posture = 100
+        if not metrics["face_detected"]:
+            raw_posture = 0
+            metrics["alert"] = "Position your face in front of the camera"
         else:
-            # If face is detected but shoulders aren't, check framing
-            if metrics["face_detected"]:
-                # Evaluate posture using head tilt/angle as a fallback
+            raw_posture = 100
+            pose_results = pose_detector.process(rgb_frame)
+            if pose_results.pose_landmarks:
+                pose_landmarks = pose_results.pose_landmarks.landmark
+                ls = pose_landmarks[11]
+                rs = pose_landmarks[12]
+                
+                # Calculate shoulder tilt (difference in Y-levels)
+                shoulder_tilt = abs(ls.y - rs.y)
+                # Normalization of distance
+                shoulder_width = math.sqrt((ls.x - rs.x)**2 + (ls.y - rs.y)**2)
+                
+                if shoulder_width > 0:
+                    normalized_tilt = shoulder_tilt / shoulder_width
+                    # If tilted more than 10%, warn
+                    if normalized_tilt > 0.12:
+                        raw_posture = int(max(40, 100 - normalized_tilt * 400))
+                        metrics["alert"] = metrics["alert"] or "Sit straight and level your shoulders"
+                    else:
+                        raw_posture = 100
+            else:
+                # If face is detected but shoulders aren't, check framing
                 h_ang = metrics.get("head_angle", 0.0)
                 if h_ang < 10.0:
                     raw_posture = int(95 - h_ang * 2)
@@ -162,8 +164,11 @@ def analyze_frame(image_bytes: bytes, session_history: Dict[str, Any]) -> Dict[s
                     metrics["alert"] = metrics["alert"] or "Keep your head level and sit straight"
 
         # Apply smoothing to posture score
-        prev_posture = session_history.get("prev_posture", raw_posture)
-        posture_score = int(0.8 * prev_posture + 0.2 * raw_posture)
+        if metrics["face_detected"]:
+            prev_posture = session_history.get("prev_posture", raw_posture)
+            posture_score = int(0.8 * prev_posture + 0.2 * raw_posture)
+        else:
+            posture_score = 0
         session_history["prev_posture"] = posture_score
         metrics["posture_score"] = posture_score
     except Exception as e:
