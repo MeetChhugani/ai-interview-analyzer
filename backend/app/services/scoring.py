@@ -21,8 +21,15 @@ def calculate_final_scores(session_history: Dict[str, Any]) -> Dict[str, Any]:
     # 1. Aggregate Vision Metrics
     if frame_records:
         total_frames = len(frame_records)
+        detected_frames = [f for f in frame_records if f.get("face_detected", False)]
+        total_detected = len(detected_frames)
+        
         eye_contact_frames = sum(1 for f in frame_records if f.get("eye_contact", True))
-        posture_scores = [f.get("posture_score", 100) for f in frame_records]
+        
+        # Average posture should ONLY average frames where the candidate was actually present
+        posture_scores = [f.get("posture_score", 100) for f in detected_frames]
+        avg_posture = sum(posture_scores) / total_detected if total_detected > 0 else 100.0
+        
         fidget_frames = sum(1 for f in frame_records if f.get("hand_fidgeting", False))
         
         for f in frame_records:
@@ -30,7 +37,6 @@ def calculate_final_scores(session_history: Dict[str, Any]) -> Dict[str, Any]:
             emotion_counts[emo] = emotion_counts.get(emo, 0) + 1
             
         eye_contact_ratio = eye_contact_frames / total_frames if total_frames > 0 else 1.0
-        avg_posture = sum(posture_scores) / total_frames if total_frames > 0 else 100.0
         fidget_ratio = fidget_frames / total_frames if total_frames > 0 else 0.0
 
     # 2. Aggregate Speech Metrics

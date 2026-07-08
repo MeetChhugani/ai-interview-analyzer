@@ -113,11 +113,11 @@ def analyze_frame(image_bytes: bytes, session_history: Dict[str, Any]) -> Dict[s
             
             metrics["head_angle"] = float(abs(head_yaw) + abs(head_pitch))
             
-            # Evaluate eye contact based on smoothed angles
-            if abs(head_yaw) > 12 or abs(head_pitch) > 12:
+            # Evaluate eye contact based on smoothed angles (calibrated thresholds for normal screen reading)
+            if abs(head_yaw) > 22 or abs(head_pitch) > 18:
                 metrics["eye_contact"] = False
                 metrics["alert"] = "Try to maintain direct eye contact with the camera"
-                metrics["dominant_emotion"] = "anxious"
+                metrics["dominant_emotion"] = "neutral"
             else:
                 metrics["eye_contact"] = True
                 metrics["dominant_emotion"] = "confident"
@@ -147,9 +147,9 @@ def analyze_frame(image_bytes: bytes, session_history: Dict[str, Any]) -> Dict[s
                 
                 if shoulder_width > 0:
                     normalized_tilt = shoulder_tilt / shoulder_width
-                    # If tilted more than 10%, warn
+                    # If tilted more than 12%, warn gently
                     if normalized_tilt > 0.12:
-                        raw_posture = int(max(40, 100 - normalized_tilt * 400))
+                        raw_posture = int(max(60, 100 - (normalized_tilt - 0.12) * 150))
                         metrics["alert"] = metrics["alert"] or "Sit straight and level your shoulders"
                     else:
                         raw_posture = 100
