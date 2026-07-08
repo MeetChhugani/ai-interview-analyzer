@@ -264,7 +264,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
               ),
             ),
 
-          // Interactive Timeline Chart
+          // Response Quality Trend Chart
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
@@ -282,12 +282,12 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                     const Padding(
                       padding: EdgeInsets.only(left: 14.0, bottom: 16),
                       child: Text(
-                        'Emotion Tracker Timeline',
+                        'Response Quality Trend',
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0D3A31)),
                       ),
                     ),
                     Expanded(
-                      child: _buildTimelineChart(),
+                      child: _buildTimelineChart(qEvals),
                     ),
                   ],
                 ),
@@ -648,28 +648,19 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
     );
   }
 
-  Widget _buildTimelineChart() {
-    final timeline = _reportData!['emotions_timeline'] as List<dynamic>? ?? [];
-    if (timeline.isEmpty) {
-      return const Center(child: Text('No timeline data available', style: TextStyle(color: Colors.black38)));
+  Widget _buildTimelineChart(List<dynamic>? qEvals) {
+    if (qEvals == null || qEvals.isEmpty) {
+      return const Center(child: Text('No response trend data available', style: TextStyle(color: Colors.black38)));
     }
 
-    final emotionValues = {
-      'Positive': 3.0,
-      'Neutral': 2.0,
-      'Fidgety': 1.0,
-      'Alert': 0.0,
-    };
-
     List<FlSpot> spots = [];
-    for (int i = 0; i < timeline.length; i++) {
-      final emotion = timeline[i] as String;
-      double val = emotionValues[emotion] ?? 2.0;
-      spots.add(FlSpot(i.toDouble(), val));
+    for (int i = 0; i < qEvals.length; i++) {
+      final score = (qEvals[i]['quality_score'] as num?)?.toDouble() ?? 0.0;
+      spots.add(FlSpot(i.toDouble(), score));
     }
 
     if (spots.isEmpty) {
-      spots = [const FlSpot(0, 2), const FlSpot(1, 2)];
+      spots = [const FlSpot(0, 0), const FlSpot(1, 0)];
     }
 
     return LineChart(
@@ -688,28 +679,39 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
           show: true,
           rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          bottomTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 22,
+              interval: 1,
+              getTitlesWidget: (value, meta) {
+                final idx = value.toInt();
+                if (idx >= 0 && idx < qEvals.length) {
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 4.0),
+                    child: Text('Q${idx + 1}', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF5A6561))),
+                  );
+                }
+                return const SizedBox();
+              },
+            ),
+          ),
           leftTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
-              interval: 1,
+              interval: 20,
               getTitlesWidget: (value, meta) {
-                String text = '';
-                if (value == 3.0) text = '😊';
-                if (value == 2.0) text = '😐';
-                if (value == 1.0) text = '😰';
-                if (value == 0.0) text = '⚠️';
-                return Text(text, style: const TextStyle(fontSize: 14));
+                return Text('${value.toInt()}%', style: const TextStyle(fontSize: 9, color: Color(0xFF5A6561)));
               },
-              reservedSize: 28,
+              reservedSize: 32,
             ),
           ),
         ),
         borderData: FlBorderData(show: false),
         minX: 0,
-        maxX: spots.length.toDouble() - 1,
-        minY: -0.5,
-        maxY: 3.5,
+        maxX: spots.length > 1 ? spots.length.toDouble() - 1 : 1.0,
+        minY: 0,
+        maxY: 100,
         lineBarsData: [
           LineChartBarData(
             spots: spots,
@@ -717,7 +719,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
             color: const Color(0xFF0D3A31),
             barWidth: 3.5,
             isStrokeCapRound: true,
-            dotData: const FlDotData(show: false),
+            dotData: const FlDotData(show: true),
             belowBarData: BarAreaData(
               show: true,
               color: const Color(0xFF0D3A31).withOpacity(0.06),
