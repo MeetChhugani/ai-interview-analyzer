@@ -34,7 +34,7 @@ class ApiService {
         url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(body),
-      );
+      ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         return jsonDecode(response.body);
@@ -59,7 +59,7 @@ class ApiService {
           ),
         );
 
-      final streamedResponse = await request.send();
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 8));
       final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 200) {
@@ -82,7 +82,7 @@ class ApiService {
 
       if (kIsWeb) {
         // On Web, audioFilePath is a blob URL. We must fetch the bytes from this local URL.
-        final blobResponse = await http.get(Uri.parse(audioFilePath));
+        final blobResponse = await http.get(Uri.parse(audioFilePath)).timeout(const Duration(seconds: 5));
         final bytes = blobResponse.bodyBytes;
         request.files.add(
           http.MultipartFile.fromBytes(
@@ -99,7 +99,7 @@ class ApiService {
         request.files.add(await http.MultipartFile.fromPath('file', audioFilePath));
       }
 
-      final streamedResponse = await request.send();
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 10));
       final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 200) {
@@ -116,7 +116,7 @@ class ApiService {
   Future<Map<String, dynamic>> getReport(String sessionId) async {
     final url = Uri.parse('$baseUrl/session/$sessionId/report');
     try {
-      final response = await http.get(url);
+      final response = await http.get(url).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
@@ -132,94 +132,122 @@ class ApiService {
 
   Future<Map<String, dynamic>> signup(String email, String name, String password) async {
     final url = Uri.parse('$baseUrl/auth/signup');
-    final response = await http.post(
-      url,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email, 'name': name, 'password': password}),
-    );
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      final error = jsonDecode(response.body);
-      throw Exception(error['detail'] ?? 'Failed to sign up');
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email, 'name': name, 'password': password}),
+      ).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        final error = jsonDecode(response.body);
+        throw Exception(error['detail'] ?? 'Failed to sign up');
+      }
+    } catch (e) {
+      throw Exception('Network error: $e');
     }
   }
 
   Future<Map<String, dynamic>> login(String email, String password) async {
     final url = Uri.parse('$baseUrl/auth/login');
-    final response = await http.post(
-      url,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email, 'password': password}),
-    );
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      final error = jsonDecode(response.body);
-      throw Exception(error['detail'] ?? 'Invalid credentials');
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email, 'password': password}),
+      ).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        final error = jsonDecode(response.body);
+        throw Exception(error['detail'] ?? 'Invalid credentials');
+      }
+    } catch (e) {
+      throw Exception('Network error: $e');
     }
   }
 
   Future<Map<String, dynamic>> forgotPassword(String email) async {
     final url = Uri.parse('$baseUrl/auth/forgot-password');
-    final response = await http.post(
-      url,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email}),
-    );
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      final error = jsonDecode(response.body);
-      throw Exception(error['detail'] ?? 'Failed to generate OTP');
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email}),
+      ).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        final error = jsonDecode(response.body);
+        throw Exception(error['detail'] ?? 'Failed to generate OTP');
+      }
+    } catch (e) {
+      throw Exception('Network error: $e');
     }
   }
 
   Future<Map<String, dynamic>> resetPassword(String email, String otp, String newPassword) async {
     final url = Uri.parse('$baseUrl/auth/reset-password');
-    final response = await http.post(
-      url,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email, 'otp': otp, 'new_password': newPassword}),
-    );
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      final error = jsonDecode(response.body);
-      throw Exception(error['detail'] ?? 'OTP verification failed');
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email, 'otp': otp, 'new_password': newPassword}),
+      ).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        final error = jsonDecode(response.body);
+        throw Exception(error['detail'] ?? 'OTP verification failed');
+      }
+    } catch (e) {
+      throw Exception('Network error: $e');
     }
   }
 
   Future<Map<String, dynamic>> getProfile(String userId) async {
     final url = Uri.parse('$baseUrl/auth/profile/$userId');
-    final response = await http.get(url);
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception('Profile not found');
+    try {
+      final response = await http.get(url).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Profile not found');
+      }
+    } catch (e) {
+      throw Exception('Network error: $e');
     }
   }
 
   Future<void> updateProfile(String userId, Map<String, dynamic> profileData) async {
     final url = Uri.parse('$baseUrl/auth/profile/$userId');
-    final response = await http.post(
-      url,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(profileData),
-    );
-    if (response.statusCode != 200) {
-      throw Exception('Failed to save profile on server');
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(profileData),
+      ).timeout(const Duration(seconds: 10));
+      if (response.statusCode != 200) {
+        throw Exception('Failed to save profile on server');
+      }
+    } catch (e) {
+      throw Exception('Network error: $e');
     }
   }
 
   Future<List<Map<String, dynamic>>> getHistoryFromServer(String userId) async {
     final url = Uri.parse('$baseUrl/history/$userId');
-    final response = await http.get(url);
-    if (response.statusCode == 200) {
-      final List<dynamic> list = jsonDecode(response.body);
-      return list.cast<Map<String, dynamic>>();
-    } else {
-      throw Exception('Failed to fetch history');
+    try {
+      final response = await http.get(url).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final List<dynamic> list = jsonDecode(response.body);
+        return list.cast<Map<String, dynamic>>();
+      } else {
+        throw Exception('Failed to fetch history');
+      }
+    } catch (e) {
+      throw Exception('Network error: $e');
     }
   }
 }
