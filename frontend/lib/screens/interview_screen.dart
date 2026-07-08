@@ -323,6 +323,7 @@ class _InterviewScreenState extends State<InterviewScreen> with TickerProviderSt
   Future<void> _triggerChunkUploadAndNext() async {
     final activeIndex = _currentQuestionIndex;
     _audioUploadTimer?.cancel();
+    _amplitudeSubscription?.cancel();
     
     if (_isSpeakingModeActive) {
       final path = await _audioRecorder.stop();
@@ -336,6 +337,8 @@ class _InterviewScreenState extends State<InterviewScreen> with TickerProviderSt
     setState(() {
       _currentQuestionIndex++;
       _isSpeakingModeActive = false; // Reset speaking mode for the next question
+      _isVoiceRecordingActive = false; // Reset voice recording flag
+      _waveformAmplitude = 0.05; // Flatline waveform visualizer
     });
 
     if (_currentQuestionIndex < widget.questions.length) {
@@ -345,6 +348,7 @@ class _InterviewScreenState extends State<InterviewScreen> with TickerProviderSt
 
   Future<void> _endInterview() async {
     _audioUploadTimer?.cancel();
+    _amplitudeSubscription?.cancel();
     if (_isSpeakingModeActive) {
       final path = await _audioRecorder.stop();
       if (path != null) {
@@ -357,6 +361,8 @@ class _InterviewScreenState extends State<InterviewScreen> with TickerProviderSt
     setState(() {
       _isRecording = false;
       _isSpeakingModeActive = false;
+      _isVoiceRecordingActive = false; // Reset voice recording flag
+      _waveformAmplitude = 0.05; // Flatline waveform visualizer
       _uiStatus = InterviewUIStatus.analyzing;
     });
     
