@@ -81,6 +81,91 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  void _showSettingsDialog() {
+    final textController = TextEditingController(text: ApiService.serverIp);
+    showDialog(
+      context: context,
+      builder: (context) {
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: AlertDialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+              side: const BorderSide(color: Color(0xFFEADBC8), width: 1),
+            ),
+            title: const Row(
+              children: [
+                Icon(Icons.dns_rounded, color: Color(0xFF0D3A31)),
+                SizedBox(width: 10),
+                Text(
+                  'Server Configuration',
+                  style: TextStyle(color: Color(0xFF0D3A31), fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Set the backend IP and port. Use 127.0.0.1:8000 for USB connection, or your laptop\'s IP address (e.g. 10.53.170.4:8000) if connecting over Wi-Fi.',
+                  style: TextStyle(color: Color(0xFF5A6561), fontSize: 13, height: 1.4),
+                ),
+                const SizedBox(height: 20),
+                TextField(
+                  controller: textController,
+                  style: const TextStyle(color: Color(0xFF0D3A31), fontFamily: 'monospace'),
+                  decoration: InputDecoration(
+                    labelText: 'Backend Address',
+                    labelStyle: const TextStyle(color: Color(0xFF0D3A31)),
+                    hintText: '127.0.0.1:8000',
+                    hintStyle: TextStyle(color: const Color(0xFF0D3A31).withOpacity(0.3)),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: const Color(0xFF0D3A31).withOpacity(0.12)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFF0D3A31)),
+                    ),
+                    filled: true,
+                    fillColor: const Color(0xFFF8F4EA).withOpacity(0.5),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel', style: TextStyle(color: Color(0xFF5A6561))),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0D3A31),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () {
+                  setState(() {
+                    ApiService.serverIp = textController.text.trim();
+                  });
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Server updated to: ${ApiService.serverIp}'),
+                      backgroundColor: const Color(0xFF10B981),
+                    ),
+                  );
+                },
+                child: const Text('Save Settings', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
@@ -88,13 +173,15 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F4EA),
       body: SafeArea(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 40),
+        child: Stack(
+          children: [
+            SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 40),
               // App Logo & Brand
               Center(
                 child: Container(
@@ -268,8 +355,19 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ],
               ),
-            ],
-          ),
+                ],
+              ),
+            ),
+            Positioned(
+              top: 10,
+              right: 10,
+              child: IconButton(
+                icon: const Icon(Icons.settings_rounded, color: Color(0xFF0D3A31)),
+                onPressed: _showSettingsDialog,
+                tooltip: 'Server Settings',
+              ),
+            ),
+          ],
         ),
       ),
     );
