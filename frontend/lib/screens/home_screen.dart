@@ -121,6 +121,34 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     String selectedCategory = defaultCategory;
     double selectedCount = 5.0; // Default to 5 questions
 
+    final dropdownItems = [
+      'Software Engineer',
+      'Software Developer',
+      'Product Manager',
+      'Data Analyst',
+      'HR Manager',
+      'Android Developer',
+      'Investment Banker',
+      'Sales Representative',
+      'Marketing Specialist',
+      'Nurse',
+      'Doctor',
+      'Research Scientist',
+      'Customer Support Specialist',
+      'Project Manager',
+      'Teacher / Educator',
+      'Hotel Manager',
+      'Chartered Accountant',
+      'Graphic Designer',
+      'Cybersecurity Analyst',
+      'Mechanical Engineer',
+      'Business Analyst',
+    ];
+
+    if (!dropdownItems.contains(selectedCategory)) {
+      dropdownItems.add(selectedCategory);
+    }
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -207,28 +235,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           fontWeight: FontWeight.bold,
                         ),
                         isExpanded: true,
-                        items: [
-                          'Software Engineer',
-                          'Product Manager',
-                          'Data Analyst',
-                          'HR Manager',
-                          'Android Developer',
-                          'Investment Banker',
-                          'Sales Representative',
-                          'Marketing Specialist',
-                          'Nurse',
-                          'Doctor',
-                          'Research Scientist',
-                          'Customer Support Specialist',
-                          'Project Manager',
-                          'Teacher / Educator',
-                          'Hotel Manager',
-                          'Chartered Accountant',
-                          'Graphic Designer',
-                          'Cybersecurity Analyst',
-                          'Mechanical Engineer',
-                          'Business Analyst',
-                        ].map((role) {
+                        items: dropdownItems.map((role) {
                           return DropdownMenuItem<String>(
                             value: role,
                             child: Text(role),
