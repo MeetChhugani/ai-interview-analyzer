@@ -1,50 +1,51 @@
 from typing import Dict, Any, List
+import os
+import json
+
+# Load questions and ideal answers from dynamic JSON database file inside scoring.py
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+QUESTIONS_DB_PATH = os.path.join(CURRENT_DIR, "questions_db.json")
+
+try:
+    with open(QUESTIONS_DB_PATH, "r") as f:
+        QUESTIONS_POOL = json.load(f)
+except Exception as e:
+    print(f"Error loading questions_db.json in scoring.py: {e}")
+    QUESTIONS_POOL = {}
 
 def calculate_final_scores(session_history: Dict[str, Any]) -> Dict[str, Any]:
     """
     Aggregates all frame and speech records in session_history to compute overall scores
-    and generate personalized improvement suggestions.
+    using a robust, explainable, and deterministic formula.
     """
     frame_records = session_history.get("frames", [])
     speech_records = session_history.get("speech", [])
 
-    # Initialize default scores
-    confidence_score = 80
-    communication_score = 80
-    behavioral_score = 80
+    total_frames = len(frame_records)
+    face_detected_frames = sum(1 for f in frame_records if f.get("face_detected", False))
+    face_detection_ratio = face_detected_frames / total_frames if total_frames > 0 else 0.0
 
-    eye_contact_ratio = 1.0
-    avg_posture = 100.0
-    fidget_ratio = 0.0
-    emotion_counts = {"confident": 0, "neutral": 0, "anxious": 0}
-    
-    # 1. Aggregate Vision Metrics
-    if frame_records:
-        total_frames = len(frame_records)
-        detected_frames = [f for f in frame_records if f.get("face_detected", False)]
-        total_detected = len(detected_frames)
-        
-        eye_contact_frames = sum(1 for f in frame_records if f.get("eye_contact", True))
-        
-        # Average posture should ONLY average frames where the candidate was actually present
-        posture_scores = [f.get("posture_score", 100) for f in detected_frames]
-        avg_posture = sum(posture_scores) / total_detected if total_detected > 0 else 100.0
-        
-        fidget_frames = sum(1 for f in frame_records if f.get("hand_fidgeting", False))
-        
-        for f in frame_records:
-            emo = f.get("dominant_emotion", "neutral")
-            emotion_counts[emo] = emotion_counts.get(emo, 0) + 1
-            
-        eye_contact_ratio = eye_contact_frames / total_frames if total_frames > 0 else 1.0
-        fidget_ratio = fidget_frames / total_frames if total_frames > 0 else 0.0
+    eye_contact_frames = sum(1 for f in frame_records if f.get("eye_contact", True))
+    eye_contact_ratio = eye_contact_frames / total_frames if total_frames > 0 else 0.0
 
-    # 2. Aggregate Speech Metrics
+    posture_scores = [f.get("posture_score", 100) for f in frame_records if f.get("face_detected", False)]
+    avg_posture = sum(posture_scores) / len(posture_scores) if posture_scores else 100.0
+
+    fidget_frames = sum(1 for f in frame_records if f.get("hand_fidgeting", False))
+    fidget_ratio = fidget_frames / total_frames if total_frames > 0 else 0.0
+
+    head_angles = [f.get("head_angle", 0.0) for f in frame_records if f.get("face_detected", False)]
+    avg_head_angle = sum(head_angles) / len(head_angles) if head_angles else 0.0
+
+    # Aggregate speech metrics
     total_words = 0
     total_fillers = 0
     wpm_list = []
     full_transcript = []
     
+    rms_list = []
+    rms_std_list = []
+
     for s in speech_records:
         total_words += s.get("word_count", 0)
         total_fillers += s.get("filler_words_count", 0)
@@ -52,215 +53,229 @@ def calculate_final_scores(session_history: Dict[str, Any]) -> Dict[str, Any]:
             wpm_list.append(s.get("wpm"))
         if s.get("text"):
             full_transcript.append(s.get("text"))
+        
+        # Audio metrics
+        if "audio_metrics" in s:
+            rms_list.append(s["audio_metrics"].get("rms", 0.05))
+            rms_std_list.append(s["audio_metrics"].get("rms_std", 0.03))
 
     avg_wpm = int(sum(wpm_list) / len(wpm_list)) if wpm_list else 0
     filler_ratio = total_fillers / total_words if total_words > 0 else 0.0
+    avg_rms = sum(rms_list) / len(rms_list) if rms_list else 0.05
+    avg_rms_std = sum(rms_std_list) / len(rms_std_list) if rms_std_list else 0.03
+    full_transcript_str = " ".join(full_transcript)
 
-    # 3. Calculate Scores (0 - 100 scale)
-    # Confidence Score is based on: Eye contact (40%), Posture (30%), Emotion/Fidgeting (30%)
-    eye_contact_factor = eye_contact_ratio * 100
-    fidget_penalty = fidget_ratio * 50
-    anxious_penalty = (emotion_counts.get("anxious", 0) / len(frame_records)) * 40 if frame_records else 0
-    
-    # If no frames were captured or no face was detected, confidence score is 0
-    has_detected_face = any(f.get("face_detected", False) for f in frame_records)
-    if not frame_records or not has_detected_face:
-        confidence_score = 0
-    else:
-        confidence_score = int(min(100, max(0, (eye_contact_factor * 0.4) + (avg_posture * 0.3) + (30 - fidget_penalty - anxious_penalty))))
-        # If they never looked at the camera once, apply a heavy penalty
-        if eye_contact_ratio == 0:
-            confidence_score = int(confidence_score * 0.3) # Heavy penalty (reduced by 70%)
-
-    # Communication Score is based on: WPM pacing (50%), Filler word density (50%)
-    # If the user barely spoke, we penalize communication heavily.
-    if total_words < 2:
+    # 1. Parameter: Speech Clarity
+    if total_words < 5:
         pacing_score = 0
+        pause_score = 0
         filler_score = 0
-        communication_score = 0
-    elif total_words < 6:
-        pacing_score = 10
-        filler_score = 10
-        communication_score = 10
     else:
-        # Ideal WPM is 110 - 150.
-        if 115 <= avg_wpm <= 145:
-            pacing_score = 100
-        elif 95 <= avg_wpm < 115 or 145 < avg_wpm <= 165:
-            pacing_score = 80
-        else:
-            pacing_score = 55
-            
-        # Gentler, realistic filler words scoring penalty capped at 50 minimum
-        filler_score = max(50, 100 - (filler_ratio * 300))
-        communication_score = int((pacing_score * 0.5) + (filler_score * 0.5))
-
-    # Behavioral Score is based on: Posture correctness (60%), Gesture appropriate stability (40%)
-    if not frame_records or not has_detected_face:
-        behavioral_score = 0
-    else:
-        behavioral_score = int(min(100, max(0, (avg_posture * 0.6) + ((1.0 - fidget_ratio) * 40))))
-
-    # Overall Score (average of the three)
-    overall_score = int((confidence_score + communication_score + behavioral_score) / 3.0)
-
-    # 4. Generate Personalized Feedback
-    feedback = []
-    
-    # Eye contact feedback
-    if not frame_records or not has_detected_face:
-        feedback.append({
-            "category": "Eye Contact",
-            "status": "Not Detected",
-            "score": 0,
-            "detail": "No face was detected during the session. Please sit directly in front of the camera."
-        })
-    elif eye_contact_ratio > 0.85:
-        feedback.append({
-            "category": "Eye Contact",
-            "status": "Excellent",
-            "score": int(eye_contact_ratio * 100),
-            "detail": "You maintained excellent eye contact. This builds strong trust and shows attentiveness."
-        })
-    elif eye_contact_ratio > 0.6:
-        feedback.append({
-            "category": "Eye Contact",
-            "status": "Moderate",
-            "score": int(eye_contact_ratio * 100),
-            "detail": "Good, but try to look at the camera more consistently when speaking. Avoid looking around the room."
-        })
-    else:
-        feedback.append({
-            "category": "Eye Contact",
-            "status": "Needs Improvement",
-            "score": int(eye_contact_ratio * 100),
-            "detail": "Your gaze drifted away frequently. Look directly at the webcam to engage the interviewer."
-        })
-
-    # Posture feedback
-    if not frame_records or not has_detected_face or avg_posture == 0:
-        feedback.append({
-            "category": "Posture",
-            "status": "Not Detected",
-            "score": 0,
-            "detail": "Your body/shoulders were not visible. Adjust your camera so your chest and shoulders are in the frame."
-        })
-    elif avg_posture > 90:
-        feedback.append({
-            "category": "Posture",
-            "status": "Excellent",
-            "score": int(avg_posture),
-            "detail": "Your posture was upright and stable. It conveys poise, professionalism, and high confidence."
-        })
-    elif avg_posture > 75:
-        feedback.append({
-            "category": "Posture",
-            "status": "Good",
-            "score": int(avg_posture),
-            "detail": "Generally good posture, but watch out for occasional leaning or shoulder slumping."
-        })
-    else:
-        feedback.append({
-            "category": "Posture",
-            "status": "Needs Improvement",
-            "score": int(avg_posture),
-            "detail": "You showed significant slumping or uneven shoulders. Try sitting straight to look energetic."
-        })
-
-    # Speech pacing feedback
-    if total_words < 2:
-        feedback.append({
-            "category": "Speaking Pace",
-            "status": "No Speech Detected",
-            "score": 0,
-            "detail": "No speech was detected. Please answer the questions audibly."
-        })
-        feedback.append({
-            "category": "Clarity",
-            "status": "No Speech Detected",
-            "score": 0,
-            "detail": "We were unable to evaluate your clarity because no answers were spoken."
-        })
-    elif total_words < 6:
-        feedback.append({
-            "category": "Speaking Pace",
-            "status": "Insufficient Speech",
-            "score": 10,
-            "detail": "Your answers were too short. Try to elaborate and speak for at least 30-45 seconds per question."
-        })
-        feedback.append({
-            "category": "Clarity",
-            "status": "Insufficient Speech",
-            "score": 10,
-            "detail": "We need more speech data to accurately analyze your vocabulary and pronunciation clarity."
-        })
-    else:
+        # Pacing
         if 110 <= avg_wpm <= 150:
-            feedback.append({
-                "category": "Speaking Pace",
-                "status": "Excellent",
-                "score": 95,
-                "detail": f"You spoke at an average of {avg_wpm} words per minute, which is the perfect conversational rate."
-            })
-        elif avg_wpm > 150:
-            feedback.append({
-                "category": "Speaking Pace",
-                "status": "Too Fast",
-                "score": 65,
-                "detail": f"Your speed was {avg_wpm} WPM. Try slowing down and using intentional pauses for emphasis."
-            })
+            pacing_score = 100
+        elif avg_wpm < 110:
+            pacing_score = max(0, 100 - (110 - avg_wpm))
         else:
-            feedback.append({
-                "category": "Speaking Pace",
-                "status": "Too Slow",
-                "score": 60,
-                "detail": f"Your speed was {avg_wpm} WPM. Try speaking more dynamically to keep interest high."
-            })
+            pacing_score = max(0, 100 - (avg_wpm - 150) * 2)
 
-        # Filler word feedback
-        if filler_ratio < 0.03:
-            feedback.append({
-                "category": "Clarity",
-                "status": "Excellent",
-                "score": 98,
-                "detail": "You spoke clearly with very few filler words, which makes your answers sound polished."
-            })
-        elif filler_ratio < 0.07:
-            feedback.append({
-                "category": "Clarity",
-                "status": "Moderate",
-                "score": 75,
-                "detail": f"You had a few filler words ({total_fillers} total). Take pauses instead of filling silence with 'um' or 'like'."
-            })
+        # Pauses based on punctuation density
+        punctuation_count = sum(full_transcript_str.count(p) for p in [".", ",", "?", "!", ";"])
+        pause_ratio = punctuation_count / total_words if total_words > 0 else 0.0
+        if 0.05 <= pause_ratio <= 0.15:
+            pause_score = 100
+        elif pause_ratio < 0.05:
+            pause_score = max(0, 100 - int((0.05 - pause_ratio) * 2000))
         else:
-            feedback.append({
-                "category": "Clarity",
-                "status": "Needs Work",
-                "score": 50,
-                "detail": f"Filler words represented {int(filler_ratio*100)}% of your vocabulary. Practice pausing before you speak."
-            })
+            pause_score = max(0, 100 - int((pause_ratio - 0.15) * 1000))
 
-    # Calculate answer content evaluations
+        # Filler words
+        if filler_ratio < 0.02:
+            filler_score = 100
+        elif filler_ratio <= 0.12:
+            filler_score = max(0, 100 - int((filler_ratio - 0.02) * 1000))
+        else:
+            filler_score = 0
+
+    speech_clarity_score = int(0.4 * pacing_score + 0.3 * pause_score + 0.3 * filler_score)
+
+    # 2. Parameter: Confidence (Voice tone + Facial stability)
+    if not frame_records or face_detection_ratio < 0.1:
+        facial_stability_score = 10
+    else:
+        if avg_head_angle <= 8.0:
+            facial_stability_score = 100
+        else:
+            facial_stability_score = max(0, 100 - int((avg_head_angle - 8.0) * 5.0))
+
+    if total_words < 5 or avg_rms < 0.01:
+        voice_tone_score = 10 if total_words < 5 else 0
+    else:
+        if 0.04 <= avg_rms_std <= 0.15:
+            voice_tone_score = 100
+        elif avg_rms_std < 0.04:
+            voice_tone_score = max(0, 100 - int((0.04 - avg_rms_std) * 1250))
+        else:
+            voice_tone_score = max(0, 100 - int((avg_rms_std - 0.15) * 500))
+
+    confidence_score = int(0.5 * voice_tone_score + 0.5 * facial_stability_score)
+
+    # 3. Parameter: Eye Contact
+    eye_contact_score = int(eye_contact_ratio * 100)
+
     questions = session_history.get("questions", [])
     answers = session_history.get("answers", [])
-    evals = evaluate_answers(questions, answers)
-    
-    # Factor answer quality into communication score (if answers were provided)
-    if evals:
-        if total_words < 2:
-            communication_score = 0
-        else:
-            avg_quality = sum(e["quality_score"] for e in evals) / len(evals)
-            communication_score = int((communication_score * 0.6) + (avg_quality * 0.4))
-        # Re-average overall score
-        overall_score = int((confidence_score + communication_score + behavioral_score) / 3.0)
+    ideal_answers = session_history.get("ideal_answers", [])
+    evals = evaluate_answers(questions, answers, ideal_answers)
+    avg_quality = sum(e["quality_score"] for e in evals) / len(evals) if evals else 80.0
 
-    # 4. Generate AI Executive Coach Feedback
+    gesture_score = int((1.0 - fidget_ratio) * 100)
+    speech_density_score = min(100, max(20, int((total_words / 150.0) * 100))) if total_words > 0 else 0
+    engagement_score = int(0.5 * avg_quality + 0.3 * gesture_score + 0.2 * speech_density_score)
+
+    # Apply Rule-based corrections
+    # Correct Confidence if eye contact is very low
+    if eye_contact_score < 30:
+        confidence_score = int(confidence_score * 0.6)
+
+    # Standard formula
+    overall_score = int(0.3 * confidence_score + 0.3 * speech_clarity_score + 0.2 * eye_contact_score + 0.2 * engagement_score)
+
+    # Cap overall score if speech clarity is poor
+    if speech_clarity_score < 50:
+        overall_score = min(overall_score, 55)
+
+    # Cap overall score if face detection is extremely low (no camera presence)
+    if face_detection_ratio < 0.1:
+        confidence_score = 10
+        eye_contact_score = 0
+        engagement_score = min(engagement_score, 20)
+        overall_score = 10
+
+    # Build feedback statements
+    feedback = []
+    
+    # Speech Clarity Feedback
+    if total_words < 5:
+        feedback.append({
+            "category": "Speech Clarity",
+            "status": "Needs Improvement",
+            "score": speech_clarity_score,
+            "detail": "No substantial speech was detected. Please answer the questions clearly and audibly."
+        })
+    elif speech_clarity_score >= 80:
+        feedback.append({
+            "category": "Speech Clarity",
+            "status": "Excellent",
+            "score": speech_clarity_score,
+            "detail": f"Excellent speech patterns! You spoke at {avg_wpm} WPM with clean pauses and very few filler words."
+        })
+    elif speech_clarity_score >= 60:
+        feedback.append({
+            "category": "Speech Clarity",
+            "status": "Good",
+            "score": speech_clarity_score,
+            "detail": f"Good clarity ({avg_wpm} WPM). Try to further minimize vocal fillers and utilize structured pauses."
+        })
+    else:
+        feedback.append({
+            "category": "Speech Clarity",
+            "status": "Needs Improvement",
+            "score": speech_clarity_score,
+            "detail": f"Pacing was {avg_wpm} WPM with higher filler words ({total_fillers} total). Practice slow, structured breathing."
+        })
+
+    # Confidence Feedback
+    if face_detection_ratio < 0.1:
+        feedback.append({
+            "category": "Confidence",
+            "status": "Needs Improvement",
+            "score": confidence_score,
+            "detail": "We could not evaluate confidence due to lack of face detection. Adjust your setup."
+        })
+    elif confidence_score >= 80:
+        feedback.append({
+            "category": "Confidence",
+            "status": "Excellent",
+            "score": confidence_score,
+            "detail": "You showed great visual posture and highly confident vocal modulation/presence."
+        })
+    elif confidence_score >= 60:
+        feedback.append({
+            "category": "Confidence",
+            "status": "Good",
+            "score": confidence_score,
+            "detail": "Solid confidence levels, though minor vocal tremor or excessive head movements were observed."
+        })
+    else:
+        feedback.append({
+            "category": "Confidence",
+            "status": "Needs Improvement",
+            "score": confidence_score,
+            "detail": "Try to speak more dynamically and keep your head stable to project authority."
+        })
+
+    # Eye Contact Feedback
+    if face_detection_ratio < 0.1:
+        feedback.append({
+            "category": "Eye Contact",
+            "status": "Needs Improvement",
+            "score": 0,
+            "detail": "Adjust your camera so the tracking system can monitor your gaze orientation."
+        })
+    elif eye_contact_score >= 80:
+        feedback.append({
+            "category": "Eye Contact",
+            "status": "Excellent",
+            "score": eye_contact_score,
+            "detail": "Superb eye contact! You looked directly at the camera, building strong interviewer engagement."
+        })
+    elif eye_contact_score >= 60:
+        feedback.append({
+            "category": "Eye Contact",
+            "status": "Good",
+            "score": eye_contact_score,
+            "detail": "Good, but try to avoid looking away frequently when formulating your thoughts."
+        })
+    else:
+        feedback.append({
+            "category": "Eye Contact",
+            "status": "Needs Improvement",
+            "score": eye_contact_score,
+            "detail": "Frequent gaze drift detected. Look directly at the webcam lens to engage your interviewer."
+        })
+
+    # Engagement Feedback
+    if engagement_score >= 80:
+        feedback.append({
+            "category": "Engagement",
+            "status": "Excellent",
+            "score": engagement_score,
+            "detail": "Highly interactive response style. Excellent structured arguments and physical gestures."
+        })
+    elif engagement_score >= 60:
+        feedback.append({
+            "category": "Engagement",
+            "status": "Good",
+            "score": engagement_score,
+            "detail": "Good participation level. Try to use more industry keywords and keep hand gestures stable."
+        })
+    else:
+        feedback.append({
+            "category": "Engagement",
+            "status": "Needs Improvement",
+            "score": engagement_score,
+            "detail": "Expand on your ideas and elaborate with specific case examples to build trust."
+        })
+
+    # Build the final scores breakdown dict
     breakdown = {
+        "speech_clarity": speech_clarity_score,
         "confidence": confidence_score,
-        "communication": communication_score,
-        "behavioral": behavioral_score
+        "eye_contact": eye_contact_score,
+        "engagement": engagement_score
     }
+    
     metrics = {
         "eye_contact_ratio": round(eye_contact_ratio, 2),
         "average_posture": round(avg_posture, 2),
@@ -269,8 +284,7 @@ def calculate_final_scores(session_history: Dict[str, Any]) -> Dict[str, Any]:
         "total_words": total_words,
         "filler_words_total": total_fillers
     }
-    full_transcript_str = " ".join(full_transcript)
-    
+
     ai_summary = generate_ai_feedback(
         session_history.get("category", "General"),
         overall_score,
@@ -279,7 +293,6 @@ def calculate_final_scores(session_history: Dict[str, Any]) -> Dict[str, Any]:
         full_transcript_str
     )
 
-    # Construct the response
     return {
         "overall_score": overall_score,
         "scores_breakdown": breakdown,
@@ -307,13 +320,14 @@ def generate_ai_feedback(category: str, overall_score: int, breakdown: Dict[str,
                 f"for a candidate who completed a mock interview for a '{category}' position.\n\n"
                 f"Performance Metrics:\n"
                 f"- Overall Rating: {overall_score}/100\n"
-                f"- Confidence (Visuals/Gaze): {breakdown.get('confidence')}/100\n"
-                f"- Communication (Delivery/Words): {breakdown.get('communication')}/100\n"
-                f"- Behavioral (Posture/Body): {breakdown.get('behavioral')}/100\n"
+                f"- Speech Clarity: {breakdown.get('speech_clarity')}/100\n"
+                f"- Confidence: {breakdown.get('confidence')}/100\n"
+                f"- Eye Contact: {breakdown.get('eye_contact')}/100\n"
+                f"- Engagement: {breakdown.get('engagement')}/100\n"
                 f"- Speaking Speed: {metrics.get('wpm')} WPM\n"
                 f"- Total Words: {metrics.get('total_words')}\n"
                 f"- Filler Words Total: {metrics.get('filler_words_total')}\n"
-                f"- Eye Contact: {int(metrics.get('eye_contact_ratio', 1.0) * 100)}%\n"
+                f"- Eye Contact Ratio: {int(metrics.get('eye_contact_ratio', 1.0) * 100)}%\n"
                 f"- Posture Score: {int(metrics.get('average_posture', 100))}%\n\n"
                 f"Answers Transcript:\n"
                 f"\"{transcript}\"\n\n"
@@ -349,49 +363,45 @@ def generate_ai_feedback(category: str, overall_score: int, breakdown: Dict[str,
 
     # Local rules-based high-fidelity fallback generator
     summary_text = ""
-    if overall_score >= 82:
-        summary_text = f"**Executive Summary:** You delivered a highly confident and structured mock interview for the '{category}' role. Your posture and delivery reflect professional presence and strong capabilities. With a few minor adjustments to expand your technical concepts, you are ready for actual interviews."
-    elif overall_score >= 65:
-        summary_text = f"**Executive Summary:** You have a solid foundation for the '{category}' role and responded clearly. Improving your eye contact, rolling your shoulders back to maintain an upright posture, and substituting silent pauses for filler words will boost your overall rating."
+    if overall_score >= 80:
+        summary_text = f"**Executive Summary:** You delivered a highly confident and structured mock interview for the '{category}' role. Your speech clarity and presence reflect professional capabilities."
+    elif overall_score >= 60:
+        summary_text = f"**Executive Summary:** You have a solid foundation for the '{category}' role. Improving speech pacing, maintaining steady camera eye contact, and minimizing filler words will boost your overall rating."
     else:
-        summary_text = f"**Executive Summary:** Consistent practice is highly recommended for this role. Focus on speaking audibly, maintaining steady eye contact with the camera lens, and structuring your answers with industry-specific terms to build a persuasive narrative."
+        summary_text = f"**Executive Summary:** Consistent practice is highly recommended for this role. Focus on keeping steady eye contact, raising speaking clarity, and structuring answers using key terminology."
 
-    # Visual Presence
-    vis_score = breakdown.get('confidence', 80)
     strengths = []
     improvements = []
     
-    if vis_score >= 80:
-        strengths.append("• **Consistent Eye Contact:** You did a great job looking at the camera lens, conveying authenticity and engagement.")
+    # Eye Contact
+    if breakdown.get('eye_contact', 80) >= 80:
+        strengths.append("• **Direct Eye Contact:** You maintained excellent eye contact, conveying engagement and authenticity.")
     else:
-        improvements.append("• **Camera Presence:** Your gaze drifted frequently. Try looking directly at the camera lens rather than looking around the room to formulate your thoughts.")
+        improvements.append("• **Eye Contact:** Practice looking directly at the camera lens rather than looking away when formulating ideas.")
 
-    # Posture
-    posture_score = metrics.get('average_posture', 100)
-    if posture_score >= 85:
-        strengths.append("• **Professional Posture:** You maintained an upright, open shoulder alignment, which projects energy and confidence.")
+    # Speech Clarity
+    if breakdown.get('speech_clarity', 80) >= 80:
+        strengths.append(f"• **Clear Speech Pacing:** You spoke with optimal pacing ({metrics.get('wpm')} WPM) and minimal filler words.")
     else:
-        improvements.append("• **Upright Alignment:** Your shoulders slouched or drifted out of frame. Sit back with your chest open to improve vocal resonance and visual presence.")
+        improvements.append("• **Speech Clarity:** Reduce filler words and practice taking clean silent pauses instead of verbal ticks.")
 
-    # Verbal
-    wpm = metrics.get('wpm', 130)
-    fillers = metrics.get('filler_words_total', 0)
-    if breakdown.get('communication', 80) >= 80:
-        strengths.append(f"• **Excellent Pacing:** You spoke at a highly conversational pace ({wpm} WPM) with minimal verbal pauses.")
+    # Confidence
+    if breakdown.get('confidence', 80) >= 80:
+        strengths.append("• **Confident Vocal Tone:** You spoke with a stable volume and pleasant vocal inflection, projecting professional authority.")
     else:
-        if wpm > 150:
-            improvements.append(f"• **Slow Down Pacing:** You spoke at a rapid {wpm} WPM. Take deep breaths and introduce intentional pauses between key concepts.")
-        elif wpm < 95:
-            improvements.append(f"• **Project Energy:** Your pace was somewhat slow ({wpm} WPM). Practice dynamic voice modulation to keep the interviewer engaged.")
-        
-        if fillers > 2:
-            improvements.append(f"• **Reduce Filler Words:** You used {fillers} filler words. Practice taking brief silent pauses instead of filling the silence with 'um' or 'like'.")
+        improvements.append("• **Vocal Tremor/Postural Shift:** Focus on sitting upright and modulating your voice to show dynamic vocal energy.")
 
-    # Finalize Strengths and Improvements lists
+    # Engagement
+    if breakdown.get('engagement', 80) >= 80:
+        strengths.append("• **Dynamic Engagement:** You structured your answers with key industry concepts and appropriate gesture stability.")
+    else:
+        improvements.append("• **Answer Structuring:** Practice the STAR method (Situation, Task, Action, Result) to write structured and complete responses.")
+
+    # Finalize lists
     if not strengths:
-        strengths.append("• **Completion:** You successfully completed the mock session, demonstrating dedication and technical effort.")
+        strengths.append("• **Completion:** Successfully finished mock sessions, representing a dedication to practice.")
     if not improvements:
-        improvements.append("• **Technical Depth:** Further expand on your answers with advanced architectural patterns and case studies.")
+        improvements.append("• **Advanced Depth:** Elaborate on advanced design pattern nuances and concrete KPIs.")
 
     strengths_str = "\n".join(strengths[:2])
     improvements_str = "\n".join(improvements[:2])
@@ -403,9 +413,9 @@ def generate_ai_feedback(category: str, overall_score: int, breakdown: Dict[str,
         f"**Key Areas to Improve:**\n"
         f"{improvements_str}\n\n"
         f"**Actionable Next Steps:**\n"
-        f"1. record another mock session focusing on taking structured pauses between ideas.\n"
-        f"2. Align your camera directly at eye-level to make natural eye contact.\n"
-        f"3. Practice structuring technical answers using key engineering/industry keywords."
+        f"1. Practice structured breathing exercises to reduce speed when nervous.\n"
+        f"2. Place a small visual marker near your camera to maintain stable eye contact.\n"
+        f"3. Record response answers using specific keywords for mock verification."
     )
     return local_report
 
@@ -516,40 +526,159 @@ QUESTION_KEYWORDS = {
     ]
 }
 
-def evaluate_answers(questions: list, answers: list) -> list:
+def evaluate_answers(questions: list, answers: list, ideal_answers: list = None) -> list:
+    import httpx
     evals = []
     if not questions:
         return evals
-        
-    for q, ans in zip(questions, answers):
+
+    api_key = os.getenv("OPENAI_API_KEY")
+
+    for idx, (q, ans) in enumerate(zip(questions, answers)):
         ans_clean = ans.strip()
+        
+        # 1. Resolve ideal answer
+        ideal_ans = ""
+        if ideal_answers and idx < len(ideal_answers):
+            ideal_ans = ideal_answers[idx]
+        
+        # Try lookup in QUESTIONS_POOL if still empty
+        if not ideal_ans:
+            for cat_list in QUESTIONS_POOL.values():
+                for item in cat_list:
+                    if item.get("question") == q:
+                        ideal_ans = item.get("ideal_answer", "")
+                        break
+                if ideal_ans:
+                    break
+        
+        # Default fallback if no preloaded answer exists
+        if not ideal_ans:
+            ideal_ans = "The response should demonstrate key industry knowledge, clear articulation of technical steps, and structured examples from prior experience."
+
+        # If answer is empty or too short
         if not ans_clean or len(ans_clean) < 12:
             evals.append({
                 "question": q,
                 "user_answer": ans_clean if ans_clean else "No answer recorded.",
                 "quality_score": 0,
-                "feedback": "Answer was too brief or not captured. Try to elaborate on technical details and use industry terminology."
+                "feedback": "Answer was too brief or not captured. Try to elaborate on technical details and use industry terminology.",
+                "ideal_answer": ideal_ans,
+                "correctness_score": 0,
+                "correctness_feedback": "No response was detected to match with the ideal answer. Ensure your microphone is properly connected."
             })
             continue
-            
-        keywords = QUESTION_KEYWORDS.get(q, ["experience", "project", "work", "team"])
-        matched_keys = [k for k in keywords if k.lower() in ans_clean.lower()]
-        match_count = len(matched_keys)
+
+        # 2. Extract keywords for local scoring & feedback fallback
+        keywords = []
+        for cat_list in QUESTIONS_POOL.values():
+            for item in cat_list:
+                if item.get("question") == q:
+                    keywords = item.get("keywords", [])
+                    break
+            if keywords:
+                break
         
-        if match_count >= 3:
-            score = 92
-            feedback = f"Excellent technical answer! You discussed key concepts including: {', '.join(matched_keys)}."
-        elif match_count >= 1:
-            score = 75
-            feedback = f"Good answer, but could be more comprehensive. You mentioned {', '.join(matched_keys)}, but try to also elaborate on: {', '.join([k for k in keywords if k not in matched_keys][:2])}."
-        else:
-            score = 50
-            feedback = "Your answer was somewhat generic. Make sure to use specific industry terms and address the technical concepts directly."
+        if not keywords:
+            clean_ideal_words = [w.strip(".,;:?!()\"'").lower() for w in ideal_ans.split()]
+            stop_words = {"their", "there", "about", "would", "should", "could", "these", "those", "other", "where", "which"}
+            keywords = list({w for w in clean_ideal_words if len(w) > 4 and w not in stop_words})[:5]
+
+        matched_keys = [k for k in keywords if k.lower() in ans_clean.lower()]
+        
+        correctness_score = 0
+        correctness_feedback = ""
+        
+        # Try OpenAI Path
+        if api_key:
+            try:
+                prompt = (
+                    f"Compare the candidate's answer against the ideal answer for the following question:\n"
+                    f"Question: \"{q}\"\n"
+                    f"Candidate's Answer: \"{ans_clean}\"\n"
+                    f"Ideal Answer Key: \"{ideal_ans}\"\n\n"
+                    f"Evaluate semantic correctness, accuracy, and completeness. Output EXACTLY in valid JSON format:\n"
+                    f"{{\n"
+                    f"  \"correctness_score\": <int between 0 and 100>,\n"
+                    f"  \"correctness_feedback\": \"<constructive feedback of 1-2 sentences comparing both answers and highlighting what key concepts were correct and what was missing relative to the ideal key>\"\n"
+                    f"}}\n"
+                    f"Do not include any other text, markdown headers, or JSON wrapping outside the raw curly braces."
+                )
+                response = httpx.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": "gpt-3.5-turbo",
+                        "messages": [
+                            {"role": "system", "content": "You are a precise technical interviewer grading candidate answers."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        "temperature": 0.2,
+                        "max_tokens": 200
+                    },
+                    timeout=5.0
+                )
+                if response.status_code == 200:
+                    res_data = response.json()["choices"][0]["message"]["content"].strip()
+                    parsed = json.loads(res_data)
+                    correctness_score = int(parsed.get("correctness_score", 0))
+                    correctness_feedback = parsed.get("correctness_feedback", "")
+            except Exception as e:
+                print(f"OpenAI answer comparison failed, falling back to local grading: {e}")
+
+        # Local Fallback Path (if OpenAI key missing, failed, or timed out)
+        if correctness_score == 0:
+            cand_words = {w.strip(".,;:?!()\"'").lower() for w in ans_clean.split()}
+            ideal_words = {w.strip(".,;:?!()\"'").lower() for w in ideal_ans.split()}
+            stop_words = {"the", "a", "an", "and", "or", "but", "is", "are", "was", "were", "to", "for", "in", "on", "at", "by", "of", "with", "that", "this", "it", "you", "i", "we", "they", "he", "she", "have", "has", "had", "do", "does", "did", "as", "from", "at"}
             
+            cand_clean = cand_words - stop_words
+            ideal_clean = ideal_words - stop_words
+            
+            overlap = cand_clean.intersection(ideal_clean)
+            
+            keyword_ratio = len(matched_keys) / len(keywords) if keywords else 0.0
+            overlap_ratio = len(overlap) / len(ideal_clean) if ideal_clean else 0.0
+            
+            correctness_score = int((keyword_ratio * 60) + (overlap_ratio * 40))
+            
+            if len(ans_clean) > 100:
+                correctness_score = min(100, correctness_score + 15)
+            elif len(ans_clean) < 40:
+                correctness_score = max(10, correctness_score - 10)
+                
+            correctness_score = max(10, min(100, correctness_score))
+            
+            missing_keys = [k for k in keywords if k not in matched_keys]
+            if correctness_score >= 80:
+                correctness_feedback = f"Excellent match! Your response is highly accurate and discussed key concepts including: {', '.join(matched_keys)}."
+            elif correctness_score >= 55:
+                correctness_feedback = f"Moderate accuracy. You hit key points like {', '.join(matched_keys)}, but you missed details regarding: {', '.join(missing_keys[:2]) if missing_keys else 'the core domain'}. Try to explain these key concepts."
+            else:
+                correctness_feedback = f"Low match. To hit the ideal response, please incorporate key terminology such as: {', '.join(keywords[:3])}."
+
+        # Quality score aligns directly with accuracy correctness score
+        quality_score = correctness_score
+
+        # Main overall feedback
+        if quality_score >= 80:
+            main_feedback = f"Excellent technical answer! You clearly addressed the prompt and demonstrated solid understanding of the concepts."
+        elif quality_score >= 55:
+            main_feedback = f"Good answer, but could be more complete. Try to elaborate on technical details and explain how the components interact."
+        else:
+            main_feedback = "Your answer was somewhat generic or off-topic. Focus on using specific industry terms and structuring your explanation clearly."
+
         evals.append({
             "question": q,
             "user_answer": ans_clean,
-            "quality_score": score,
-            "feedback": feedback
+            "quality_score": quality_score,
+            "feedback": main_feedback,
+            "ideal_answer": ideal_ans,
+            "correctness_score": correctness_score,
+            "correctness_feedback": correctness_feedback
         })
+        
     return evals

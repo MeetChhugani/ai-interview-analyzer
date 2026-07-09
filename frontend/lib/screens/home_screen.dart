@@ -76,7 +76,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     }
   }
 
-  Future<void> _startInterview(String category) async {
+  Future<void> _startInterview(String category, {int questionCount = 5}) async {
     setState(() {
       _isLoading = true;
     });
@@ -85,7 +85,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       final user = await AuthStore.getAuthUser();
       final userId = user?['id'];
       
-      final sessionData = await _apiService.createSession(category, userId: userId);
+      final sessionData = await _apiService.createSession(category, userId: userId, questionCount: questionCount);
       final sessionId = sessionData['session_id'];
 
       if (mounted) {
@@ -115,6 +115,219 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         });
       }
     }
+  }
+
+  void _showInterviewSetupBottomSheet(String defaultCategory) {
+    String selectedCategory = defaultCategory;
+    double selectedCount = 5.0; // Default to 5 questions
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(30),
+          topRight: Radius.circular(30),
+        ),
+      ),
+      isScrollControlled: true,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 24.0,
+                right: 24.0,
+                top: 24.0,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 32.0,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 48,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0D3A31).withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  const Row(
+                    children: [
+                      Icon(Icons.tune_rounded, color: Color(0xFF0D3A31), size: 24),
+                      SizedBox(width: 12),
+                      Text(
+                        'Interview Settings',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF0D3A31),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Customize your practice session before launching the AI coach.',
+                    style: TextStyle(
+                      color: const Color(0xFF5A6561).withOpacity(0.9),
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Job Category / Field',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: Color(0xFF0D3A31),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFAF7F0),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFF0D3A31).withOpacity(0.08)),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: selectedCategory,
+                        dropdownColor: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF0D3A31)),
+                        style: const TextStyle(
+                          color: Color(0xFF0D3A31),
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        isExpanded: true,
+                        items: [
+                          'Software Engineer',
+                          'Product Manager',
+                          'Data Analyst',
+                          'HR Manager',
+                          'Android Developer',
+                          'Investment Banker',
+                          'Sales Representative',
+                          'Marketing Specialist',
+                          'Nurse',
+                          'Doctor',
+                          'Research Scientist',
+                          'Customer Support Specialist',
+                          'Project Manager',
+                          'Teacher / Educator',
+                          'Hotel Manager',
+                          'Chartered Accountant',
+                          'Graphic Designer',
+                          'Cybersecurity Analyst',
+                          'Mechanical Engineer',
+                          'Business Analyst',
+                        ].map((role) {
+                          return DropdownMenuItem<String>(
+                            value: role,
+                            child: Text(role),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setModalState(() => selectedCategory = val);
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Number of Questions',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: Color(0xFF0D3A31),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0D3A31).withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '${selectedCount.toInt()} Qs',
+                          style: const TextStyle(
+                            color: Color(0xFF0D3A31),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      activeTrackColor: const Color(0xFF0D3A31),
+                      inactiveTrackColor: const Color(0xFF0D3A31).withOpacity(0.08),
+                      thumbColor: const Color(0xFF0D3A31),
+                      overlayColor: const Color(0xFF0D3A31).withOpacity(0.12),
+                      valueIndicatorColor: const Color(0xFF0D3A31),
+                      valueIndicatorTextStyle: const TextStyle(color: Colors.white),
+                    ),
+                    child: Slider(
+                      value: selectedCount,
+                      min: 1.0,
+                      max: 20.0,
+                      divisions: 19,
+                      label: selectedCount.toInt().toString(),
+                      onChanged: (val) {
+                        setModalState(() => selectedCount = val);
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _startInterview(selectedCategory, questionCount: selectedCount.toInt());
+                    },
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      backgroundColor: const Color(0xFF0D3A31),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                      elevation: 0,
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.play_arrow_rounded, color: Colors.white),
+                        SizedBox(width: 8),
+                        Text(
+                          'START AI SESSION',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _startCustomQuestionInterview(String question, String tag) async {
@@ -358,7 +571,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
                 // Main Banner Button (Start New Interview)
                 GestureDetector(
-                  onTap: () => _startInterview(role),
+                  onTap: () => _showInterviewSetupBottomSheet(role),
                   child: Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
@@ -441,7 +654,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 title: 'Mock Interview',
                 subtitle: 'Full interview simulation',
                 icon: Icons.assignment_outlined,
-                onTap: () => _startInterview(role),
+                onTap: () => _showInterviewSetupBottomSheet(role),
               ),
               const SizedBox(height: 12),
               _buildPracticeModeCard(

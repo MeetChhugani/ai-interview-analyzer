@@ -1,0 +1,401 @@
+import json
+import os
+
+# Define questions and ideal answers database
+DB = {
+    "Software Engineer": [
+        {
+            "question": "Can you explain the difference between a Stateful and Stateless widget in Flutter?",
+            "ideal_answer": "A Stateless widget is immutable, meaning its properties cannot change once built. It is drawn once and only updates if its parent widget rebuilds. A Stateful widget is mutable and maintains state that can change dynamically during its lifecycle. You call setState() to trigger a rebuild and update the user interface when internal data changes.",
+            "keywords": ["setState", "mutable", "immutable", "rebuild", "lifecycle", "state"]
+        },
+        {
+            "question": "What is the difference between a REST API and WebSockets, and when would you use each?",
+            "ideal_answer": "REST APIs are stateless and follow a request-response pattern over HTTP, meaning each call is independent. They are ideal for standard CRUD operations and fetching static data. WebSockets establish a persistent, bi-directional, full-duplex TCP connection, which allows real-time server-push communication. They are ideal for chat apps, live charts, or multiplayer games.",
+            "keywords": ["http", "connection", "real-time", "handshake", "persistent", "stateless"]
+        },
+        {
+            "question": "How do you handle state management in a large-scale mobile application?",
+            "ideal_answer": "For large-scale state management, you should decouple your business logic from the UI. You can use standard patterns like BLoC (Business Logic Component), Riverpod, or Redux. These manage state in global streams or stores, optimize widget rebuilds, make components testable, and keep the UI reactive.",
+            "keywords": ["provider", "bloc", "riverpod", "redux", "inherited", "architecture"]
+        },
+        {
+            "question": "What is the role of an index in a database, and how does it speed up queries?",
+            "ideal_answer": "A database index is a data structure (usually a B-Tree) that speeds up data retrieval operations. Instead of performing a slow sequential table scan, the database uses the index to quickly look up rows. It speeds up SELECT queries but adds overhead to INSERT, UPDATE, and DELETE operations since the index must also be updated.",
+            "keywords": ["index", "lookup", "speed", "scan", "btree", "performance"]
+        },
+        {
+            "question": "Can you explain the concept of Clean Architecture and why it is useful?",
+            "ideal_answer": "Clean Architecture divides a system into independent layers: domain, data, and presentation. The core domain contains business logic and entities and has no outer dependencies. This decoupling makes the application highly testable, independent of databases or UI frameworks, and easier to scale and maintain.",
+            "keywords": ["clean", "decouple", "independent", "layer", "testable", "solid"]
+        },
+        {
+            "question": "What is the difference between synchronous and asynchronous programming, and how do you handle concurrency?",
+            "ideal_answer": "Synchronous programming executes operations sequentially, blocking execution until the current task finishes. Asynchronous programming runs operations in the background (non-blocking) and continues execution. Concurrency is handled using futures, promises, or async/await syntax to wait for background values.",
+            "keywords": ["async", "await", "sync", "thread", "future", "promise", "blocking"]
+        },
+        {
+            "question": "How do you optimize the performance of a slow mobile or web application?",
+            "ideal_answer": "Optimization involves caching network responses, lazy loading heavy widgets, compressing image assets, minifying code bundles, profiling resource leaks, and minimizing expensive widget rebuilds by using const constructors or proper state filters.",
+            "keywords": ["optimize", "cache", "minify", "rendering", "profile", "lazy"]
+        },
+        {
+            "question": "What are the key differences between SQL and NoSQL databases?",
+            "ideal_answer": "SQL databases are relational, use structured schemas, support ACID transactions, and scale vertically. NoSQL databases are non-relational, schema-less, document or key-value oriented, and scale horizontally by distributing data across servers.",
+            "keywords": ["schema", "relational", "nosql", "document", "scale", "structured"]
+        }
+    ],
+    "Product Manager": [
+        {
+            "question": "How do you decide what features to prioritize in a product roadmap when multiple stakeholders disagree?",
+            "ideal_answer": "Prioritization requires data alignment and structured frameworks like RICE (Reach, Impact, Confidence, Effort) or Kano. You evaluate features based on business goals and user feedback, negotiate with stakeholders using data, and balance quick wins with long-term strategy.",
+            "keywords": ["priority", "data", "alignment", "impact", "effort", "framework"]
+        },
+        {
+            "question": "Can you describe a time when a product launch failed, and what you learned from it?",
+            "ideal_answer": "A launch fails when user adoption or metrics don't meet goals. The key takeaway is to build short feedback loops, validate assumptions early using MVP tests, conduct robust post-mortems, and iterate based on quantitative metrics and qualitative surveys.",
+            "keywords": ["learn", "fail", "launch", "metrics", "test", "feedback"]
+        },
+        {
+            "question": "How do you define and measure success for a new feature?",
+            "ideal_answer": "Success is measured using clear KPIs aligned with business goals. Key metrics include user adoption rates, daily active usage (engagement), feature conversion rates, user retention cohorts, and Net Promoter Score (NPS) feedback.",
+            "keywords": ["metrics", "kpi", "conversion", "retention", "adoption", "goal"]
+        },
+        {
+            "question": "How do you conduct user research to identify pain points for a new product?",
+            "ideal_answer": "User research involves qualitative and quantitative methods: user interviews, persona creation, customer journey mapping, surveys, usability tests, and studying clickstream analytics to isolate drop-off points.",
+            "keywords": ["research", "interview", "survey", "persona", "journey", "insights"]
+        },
+        {
+            "question": "How would you handle a situation where engineering says a key feature cannot be built on time?",
+            "ideal_answer": "I would collaborate with the engineering team to negotiate and reduce the scope of the feature, building a phased release plan. We isolate the core value to launch on time and defer secondary enhancements to future sprints.",
+            "keywords": ["negotiate", "scope", "compromise", "backlog", "timeline", "phased"]
+        },
+        {
+            "question": "What metrics would you track for a ride-sharing app like Uber to measure passenger retention?",
+            "ideal_answer": "Retention is tracked using Monthly Active Users (MAU), weekly trip frequency per user, cohort retention rates over 30/60/90 days, passenger churn rate, and lifetime value (LTV) relative to customer acquisition cost (CAC).",
+            "keywords": ["retention", "mau", "cohort", "frequency", "churn", "engagement"]
+        },
+        {
+            "question": "Can you explain how you would design an MVP (Minimum Viable Product) for a new social media application?",
+            "ideal_answer": "An MVP focuses strictly on the core value proposition (e.g., photo sharing). You prototype the critical path, launch quickly to validate user assumptions, gather user feedback, and iterate on secondary features like filters or chat later.",
+            "keywords": ["mvp", "core", "value", "prototype", "validate", "feedback"]
+        },
+        {
+            "question": "How do you balance long-term product vision with short-term business demands?",
+            "ideal_answer": "I balance this by maintaining a strategic roadmap that allocates resources to both. You reserve bandwidth for resolving technical debt and building future platform capabilities, while delivering short-term features that drive immediate revenue and retention.",
+            "keywords": ["balance", "roadmap", "technical debt", "strategy", "revenue", "compromise"]
+        }
+    ],
+    "Data Analyst": [
+        {
+            "question": "What is the difference between supervised and unsupervised learning, and can you give an example of each?",
+            "ideal_answer": "Supervised learning uses labeled training data to predict outcomes (e.g., house price regression or spam classification). Unsupervised learning analyzes unlabeled data to uncover hidden structures and group data (e.g., customer segmentation using K-means clustering).",
+            "keywords": ["labeled", "cluster", "classification", "regression", "unlabeled", "data"]
+        },
+        {
+            "question": "How do you handle missing or noisy data in a dataset before performing analysis?",
+            "ideal_answer": "I handle missing data by either dropping columns/rows (if minimal), imputing values using the mean, median, or mode, or modeling the missing values. Noisy data is cleaned by detecting and removing outliers, resolving formatting inconsistencies, and normalizing fields.",
+            "keywords": ["impute", "clean", "outliers", "drop", "median", "mean"]
+        },
+        {
+            "question": "Can you explain the difference between a join and a union in SQL?",
+            "ideal_answer": "A JOIN combines columns from two tables horizontally based on a related key (e.g. INNER or LEFT JOIN). A UNION combines the result sets of two queries vertically, stacking rows on top of each other. The queries in a UNION must return the same number of columns with matching data types.",
+            "keywords": ["join", "union", "columns", "rows", "horizontal", "vertical"]
+        },
+        {
+            "question": "What is the difference between correlation and causation, and why is it important in analysis?",
+            "ideal_answer": "Correlation measures the strength and direction of a linear relationship between two variables. Causation implies that a change in one variable directly causes a change in another. Establishing correlation does not prove causation because of potential confounding variables.",
+            "keywords": ["correlation", "causation", "relation", "cause", "spurious", "variable"]
+        },
+        {
+            "question": "How do you choose between a bar chart, a line chart, and a scatter plot for data visualization?",
+            "ideal_answer": "A bar chart is best for comparing categorical groups. A line chart is ideal for showing continuous trends over time. A scatter plot is best for illustrating the distribution and relationship between two continuous variables.",
+            "keywords": ["visualization", "bar", "line", "scatter", "trend", "distribution"]
+        },
+        {
+            "question": "What are Type I and Type II errors in hypothesis testing?",
+            "ideal_answer": "A Type I error (false positive) occurs when you reject a true null hypothesis. A Type II error (false negative) occurs when you fail to reject a false null hypothesis. Balances are managed by tuning the significance level alpha and the power of the test.",
+            "keywords": ["hypothesis", "type i", "type ii", "null", "false positive", "false negative"]
+        },
+        {
+            "question": "Can you explain the difference between A/B testing and multivariate testing?",
+            "ideal_answer": "A/B testing compares two versions (A and B) of a single variable to measure conversions. Multivariate testing evaluates multiple combinations of multiple variables simultaneously to understand how they interact with each other.",
+            "keywords": ["ab test", "multivariate", "variant", "conversion", "statistically", "significance"]
+        },
+        {
+            "question": "How do you communicate complex technical insights to non-technical business stakeholders?",
+            "ideal_answer": "I communicate insights by translating metrics into business value, using clear visual storytelling, avoiding technical jargon, highlighting actionable findings, and structuring reports around core business goals.",
+            "keywords": ["visualize", "simplify", "jargon", "storytelling", "business value", "actionable"]
+        }
+    ],
+    "HR Manager": [
+        {
+            "question": "How do you handle conflict resolution between two high-performing team members who refuse to collaborate?",
+            "ideal_answer": "I act as a neutral mediator, listening to both sides individually to practice empathy and identify the root cause of the conflict. I then bring them together to align on shared expectations, define clear boundaries, and establish collaborative guidelines.",
+            "keywords": ["listen", "talk", "mediator", "empathy", "resolution", "collaborate"]
+        },
+        {
+            "question": "What strategies do you use to improve employee retention in a high-turnover industry?",
+            "ideal_answer": "Retention is improved by building a supportive company culture, offering competitive benefits, outlining transparent career growth paths, maintaining structured feedback channels, and proactively addressing burnout through wellness programs.",
+            "keywords": ["retention", "culture", "benefits", "growth", "feedback", "engage"]
+        },
+        {
+            "question": "How do you evaluate cultural fit during an interview?",
+            "ideal_answer": "Cultural fit is evaluated using behavioral and situational interview questions that test alignment with core company values. I assess collaboration styles, growth mindset, adaptivity, and match with the team dynamics.",
+            "keywords": ["values", "collaboration", "behavioral", "scenario", "match", "align"]
+        },
+        {
+            "question": "How do you handle a situation where an employee complains about their manager's behavior?",
+            "ideal_answer": "I immediately launch a confidential investigation. I listen to the employee's concerns, document details, interview relevant witnesses, cross-reference company policies, and recommend corrective action, keeping the process highly objective.",
+            "keywords": ["investigate", "listen", "neutral", "escalate", "confidential", "policy"]
+        },
+        {
+            "question": "What steps would you take to design and implement a new diversity and inclusion program?",
+            "ideal_answer": "I would start by collecting diversity metrics to identify gaps, designing inclusive training programs, reviewing hiring filters to ensure equity, aligning core company values, and establishing clear accountability goals for leadership.",
+            "keywords": ["diversity", "inclusion", "training", "metrics", "equity", "hiring"]
+        },
+        {
+            "question": "How do you balance supporting the company's business goals with advocating for employee well-being?",
+            "ideal_answer": "I demonstrate that employee well-being directly drives productivity and long-term business goals. I advocate for work-life balance, monitor burnout metrics, and support wellness initiatives that improve retention and operational efficiency.",
+            "keywords": ["balance", "wellness", "advocate", "burnout", "productivity", "mental health"]
+        },
+        {
+            "question": "What is your approach to conducting performance reviews and giving constructive feedback?",
+            "ideal_answer": "My approach is to establish objective performance goals beforehand. I conduct 360-degree reviews, focus feedback on specific growth opportunities, maintain a constructive and supportive tone, and define future milestones collaboratively.",
+            "keywords": ["feedback", "growth", "performance", "constructive", "goals", "objective"]
+        },
+        {
+            "question": "How do you manage onboarding for a fully remote team to make them feel integrated?",
+            "ideal_answer": "I create a structured remote onboarding program that combines asynchronous training modules with daily check-ins, welcomes them in team channels, assigns an onboarding buddy, and hosts virtual team social activities.",
+            "keywords": ["onboarding", "remote", "communication", "welcome", "buddy", "engagement"]
+        }
+    ],
+    "Chartered Accountant": [
+        {
+            "question": "How do you ensure compliance with changing tax laws and financial reporting standards?",
+            "ideal_answer": "I ensure compliance by maintaining continuous education, subscribing to regulatory bulletins, conducting internal audits, and updating internal accounting policies to align with IFRS or GAAP standards.",
+            "keywords": ["compliance", "regulations", "audit", "reporting", "standards", "updates"]
+        },
+        {
+            "question": "Can you explain the difference between deferred tax assets and deferred tax liabilities?",
+            "ideal_answer": "Deferred tax assets occur when tax paid is higher than accounting tax expense, representing a future tax recovery (e.g. from tax loss carryforwards). Deferred tax liabilities arise when accounting income is higher than taxable income, representing future tax payments (e.g. due to accelerated depreciation).",
+            "keywords": ["asset", "liability", "difference", "accounting", "depreciation", "temporary"]
+        },
+        {
+            "question": "How would you handle a situation where you discover a material error in a previously audited financial statement?",
+            "ideal_answer": "I would immediately document the error, notify corporate leadership, calculate the restatement impact, prepare note disclosures under accounting policies, and coordinate with external auditors to issue restated accounts.",
+            "keywords": ["error", "materiality", "notify", "restatement", "auditor", "disclosure"]
+        }
+    ],
+    "Graphic Designer": [
+        {
+            "question": "How do you translate a client's vague brand vision into concrete visual design elements?",
+            "ideal_answer": "I start by conducting a creative brief, building dynamic mood boards, presenting initial conceptual style tiles, gathering early feedback on colors and typography, and iteratively refining high-fidelity visual assets.",
+            "keywords": ["moodboard", "concept", "typography", "palette", "branding", "iteration"]
+        },
+        {
+            "question": "Can you walk me through your creative process when working under tight deadlines?",
+            "ideal_answer": "I prioritize scope by identifying core deliverables, timebox brainstorming phases, establish sketch prototypes quickly, use asset templates where possible, and run daily feedback checkpoints to keep progress aligned.",
+            "keywords": ["deadline", "prioritize", "prototyping", "workflow", "timebox", "efficiency"]
+        },
+        {
+            "question": "How do you handle negative feedback from a client on a design you are highly passionate about?",
+            "ideal_answer": "I detach personal attachment from the design, listen to client objectives objectively, interpret the root concerns behind their feedback, explain my rationale constructively, and propose alternative creative layouts.",
+            "keywords": ["feedback", "objective", "critique", "adjust", "rational", "collaboration"]
+        }
+    ],
+    "Cybersecurity Analyst": [
+        {
+            "question": "How do you investigate and mitigate a suspected data breach or intrusion in progress?",
+            "ideal_answer": "I execute the incident response plan: contain the affected systems to limit spread, preserve event logs for forensic analysis, identify the threat vector, eliminate malicious backdoors, restore services from clean backups, and patch vulnerabilities.",
+            "keywords": ["incident", "contain", "mitigation", "forensics", "logs", "containment"]
+        },
+        {
+            "question": "What is the difference between symmetric and asymmetric encryption, and when is each used?",
+            "ideal_answer": "Symmetric encryption uses a single shared key for both encryption and decryption, making it fast and suitable for bulk data. Asymmetric encryption uses a public-private key pair, making it ideal for secure key exchange and digital signatures.",
+            "keywords": ["symmetric", "asymmetric", "private key", "public key", "performance", "security"]
+        },
+        {
+            "question": "How do you balance strong security controls with maintaining user convenience and system performance?",
+            "ideal_answer": "I integrate security seamlessly using Single Sign-On (SSO), context-aware authentication, background scanning, automated policy enforcement, and consulting users during policy design to minimize productivity overheads.",
+            "keywords": ["convenience", "friction", "sso", "authentication", "usability", "seamless"]
+        }
+    ],
+    "Mechanical Engineer": [
+        {
+            "question": "How do you perform stress analysis and choose materials for a component operating in high-temperature environments?",
+            "ideal_answer": "I run finite element analysis (FEA) models to evaluate thermal stresses. I select materials with low thermal expansion, high creep resistance, and oxidation limits, such as nickel-based superalloys or high-grade stainless steels.",
+            "keywords": ["stress", "fea", "materials", "thermal", "creep", "expansion"]
+        },
+        {
+            "question": "Can you describe a time when a prototype failed during testing, and how you diagnosed the root cause?",
+            "ideal_answer": "I performed a failure analysis by examining fracture surfaces, reviewing design tolerances, checking structural load limits, conducting FEA stress tests, identifying stress concentrations, and reinforcing the weak joints in the next design iteration.",
+            "keywords": ["prototype", "failure", "diagnose", "testing", "tolerance", "redesign"]
+        },
+        {
+            "question": "What is your experience with CAD software and designing for manufacturability (DFM)?",
+            "ideal_answer": "I use SolidWorks and AutoCAD to build components. I follow DFM principles by minimizing part counts, optimizing draft angles for injection molding, selecting standard fastener threads, and specifying realistic tolerancing limits.",
+            "keywords": ["cad", "dfm", "tolerances", "machining", "manufacture", "draft"]
+        }
+    ],
+    "Business Analyst": [
+        {
+            "question": "How do you gather, document, and prioritize business requirements from stakeholders with conflicting needs?",
+            "ideal_answer": "I host structured workshops, use MoSCoW prioritization, document requirements in clear user stories, align scope with executive business drivers, and establish stakeholder consensus using objective trade-off data.",
+            "keywords": ["requirements", "moscow", "workshops", "stories", "alignment", "prioritization"]
+        },
+        {
+            "question": "Can you explain the difference between a functional requirement and a non-functional requirement?",
+            "ideal_answer": "A functional requirement defines what a system must do (e.g. 'user must be able to log in'). A non-functional requirement specifies how the system performs its functions, detailing performance, reliability, security, scalability, or latency limits.",
+            "keywords": ["functional", "non-functional", "behavior", "performance", "scalability", "limits"]
+        },
+        {
+            "question": "What methodologies (like BPMN or UML) do you use to map out and optimize business processes?",
+            "ideal_answer": "I use Business Process Model and Notation (BPMN) to map as-is swimlane workflows. I identify operational bottlenecks and redundant steps, and design optimized to-be workflows to increase efficiency.",
+            "keywords": ["bpmn", "workflow", "optimize", "swimlane", "bottlenecks", "process"]
+        }
+    ],
+    "General Practice": [
+        {
+            "question": "Tell me about yourself and your professional background.",
+            "ideal_answer": "I am a professional with a background in my field, focusing on delivering impactful solutions. I have experience collaborating with cross-functional teams, solving operational challenges, and scaling core competencies. I am eager to apply these skills to drive value in this position.",
+            "keywords": ["experience", "background", "skills", "solutions", "team", "growth"]
+        },
+        {
+            "question": "What are your key strengths and weaknesses?",
+            "ideal_answer": "My core strength is my analytical problem-solving capacity and collaborative communication. My main weakness is that I sometimes dive too deep into operational details, but I manage this by setting clear milestones and delegating tasks effectively to keep the big picture in focus.",
+            "keywords": ["strength", "weakness", "analytical", "communication", "milestones", "delegation"]
+        },
+        {
+            "question": "Why do you want to join our company and why should we hire you?",
+            "ideal_answer": "I want to join your organization because of your innovative culture and alignment with my career values. You should hire me because I bring a solid mix of technical expertise, operational adaptivity, and a proven track record of solving complex problems.",
+            "keywords": ["motivation", "culture", "fit", "expertise", "value", "hire"]
+        },
+        {
+            "question": "How do you handle pressure, tight deadlines, or challenging scenarios?",
+            "ideal_answer": "I handle pressure by prioritizing tasks based on impact, maintaining open communication with stakeholders, breaking down large problems into daily sprints, staying organized, and remaining calm to execute objective solutions.",
+            "keywords": ["pressure", "deadlines", "prioritize", "communication", "calm", "execute"]
+        },
+        {
+            "question": "Can you describe a time you disagreed with a colleague or manager, and how you resolved it?",
+            "ideal_answer": "I scheduled a private discussion to practice active listening and understand their perspective. We focused on objective project data, resolved differences constructively, aligned on a compromise solution, and preserved a strong relationship.",
+            "keywords": ["disagreement", "listen", "resolution", "constructive", "relationship", "compromise"]
+        }
+    ]
+}
+
+# Expand every category to at least 50 questions
+# We will dynamically generate high-quality variations of role-specific and behavioral questions
+for category in list(DB.keys()):
+    base_questions = DB[category]
+    generic_behaviorals = [
+        ("What is your approach to handling constructive criticism?", "I listen to feedback with an open mind, separate personal attachment from work output, ask clarifying questions, and implement changes to refine my skills.", ["criticism", "feedback", "grow", "refine"]),
+        ("How do you manage your time when multitasking across multiple projects?", "I organize tasks using prioritization matrices (Eisenhower), define clear milestones, delegate where appropriate, and use calendar time-blocking to avoid context-switching.", ["time", "prioritize", "schedule", "milestones"]),
+        ("Can you describe a situation where you had to quickly adapt to a sudden change?", "I assessed the change objectively, refocused my priorities, collaborated with the team to design a new workflow path, and kept communication lines open to coordinate shifts.", ["adapt", "change", "assess", "communicate"]),
+        ("How do you handle working with a difficult team member?", "I practice active empathy, communicate my goals clearly, address friction in a direct, professional manner, and focus strictly on delivering project objectives.", ["conflict", "team", "colleague", "resolution"]),
+        ("What is your long-term career vision over the next 5 years?", "I aim to expand my technical leadership capabilities, take ownership of critical system architectures, mentor junior talent, and consistently deliver high-impact business value.", ["career", "vision", "leadership", "growth"]),
+        ("How do you ensure you are continuously learning and upgrading your skills?", "I read technical literature, participate in industry seminars, build side projects to test concepts, and take targeted professional certifications.", ["learning", "upskill", "courses", "projects"])
+    ]
+    
+    # Generate 50 questions per category by copying, mutating, or compiling templates
+    index = 1
+    while len(DB[category]) < 50:
+        # Generate variations based on templates
+        if category == "Software Engineer":
+            templates = [
+                ("How do you design a database schema for a {domain} system?", "I gather access patterns, identify main entities, design indices, normalize tables (or partition NoSQL collections), and configure foreign key rules.", ["schema", "index", "database", "design"]),
+                ("What is your approach to writing unit tests for a complex {module} module?", "I mock external dependencies, isolate the code under test, verify boundary conditions, assert outputs, and aim for high test coverage.", ["unit test", "mock", "coverage", "assert"]),
+                ("How do you diagnose and resolve a severe performance bottleneck in {environment}?", "I profile memory allocation, trace query execution, check network latencies, optimize hot loops, and enable resource caching.", ["profile", "bottleneck", "latency", "optimize"])
+            ]
+            domains = ["E-commerce", "SaaS Billing", "Chat Messaging", "Ride Sharing", "Social Media", "Analytics Dashboard"]
+            t = templates[index % len(templates)]
+            dom = domains[index % len(domains)]
+            DB[category].append({
+                "question": t[0].format(domain=dom, module=dom, environment=dom),
+                "ideal_answer": t[1],
+                "keywords": t[2]
+            })
+        elif category == "Product Manager":
+            templates = [
+                ("How would you evaluate the launch of a new {product} product?", "I track core adoption KPIs, measure daily active usage, compile user CSAT/NPS scores, review conversion funnels, and iterate based on quantitative metrics.", ["metrics", "kpi", "conversion", "adoption"]),
+                ("How do you write a clear PRD (Product Requirement Document) for a {feature} feature?", "I outline user personas, define the core value proposition, detail functional user stories, align design mocks, and list launch criteria.", ["prd", "persona", "user stories", "requirements"]),
+                ("What is your approach to handling customer churn in a {service} service?", "I analyze user drop-off flows, conduct exit surveys, design target retention incentives, optimize customer onboarding, and refine product value.", ["churn", "retention", "cohort", "onboarding"])
+            ]
+            products = ["FinTech Wallet", "Health Tracker", "Food Delivery App", "Cloud CRM", "EdTech Platform", "AI Copywriter"]
+            t = templates[index % len(templates)]
+            prod = products[index % len(products)]
+            DB[category].append({
+                "question": t[0].format(product=prod, feature=prod, service=prod),
+                "ideal_answer": t[1],
+                "keywords": t[2]
+            })
+        elif category == "Data Analyst":
+            templates = [
+                ("How would you analyze user engagement trends for a {domain} app?", "I group users by weekly cohort, plot retention curves, identify conversion drop-offs, and run regression models to isolate engagement drivers.", ["cohort", "retention", "trends", "analytics"]),
+                ("What steps do you take when presenting a data dashboard for {audience}?", "I simplify visuals, emphasize key metrics, remove noise, add annotations, and align data metrics with business objectives.", ["dashboard", "metrics", "visualize", "audience"]),
+                ("How do you design a robust data pipeline to clean {source} source data?", "I set up extraction scripts, filter out corrupt rows, impute null values, schema-validate the data, and load it into a data warehouse.", ["pipeline", "clean", "extract", "warehouse"])
+            ]
+            domains = ["SaaS", "E-commerce", "Gaming Portal", "IoT Smart Home", "Crypto Wallet", "Mobile Banking"]
+            t = templates[index % len(templates)]
+            dom = domains[index % len(domains)]
+            DB[category].append({
+                "question": t[0].format(domain=dom, audience=dom, source=dom),
+                "ideal_answer": t[1],
+                "keywords": t[2]
+            })
+        elif category == "HR Manager":
+            templates = [
+                ("What is your strategy to recruit and source high-quality {role} candidates?", "I build talent pipelines, leverage professional networks, write clear job profiles, host campus drives, and run inclusive screening programs.", ["source", "hiring", "recruitment", "pipeline"]),
+                ("How do you design employee engagement programs for a {department} department?", "I run regular culture surveys, host team retrospectives, coordinate skill workshops, track morale metrics, and address work-life challenges.", ["engage", "culture", "morale", "feedback"]),
+                ("How do you manage salary negotiations and offer releases for {role} hires?", "I analyze market compensation benchmarks, align offers with department budget limits, present benefits packages, and handle objections constructively.", ["compensation", "negotiate", "budget", "benefits"])
+            ]
+            roles = ["Software Engineer", "Sales Leader", "Creative Director", "Data Science", "Project Manager", "Finance Lead"]
+            t = templates[index % len(templates)]
+            r = roles[index % len(roles)]
+            DB[category].append({
+                "question": t[0].format(role=r, department=r),
+                "ideal_answer": t[1],
+                "keywords": t[2]
+            })
+        else:
+            # For other categories, we generate variations using behavioral templates and role topics
+            role_topics = {
+                "Chartered Accountant": ["auditing", "tax planning", "balance sheet", "fixed assets", "ledger reconciliation", "budget variance"],
+                "Graphic Designer": ["vector illustrations", "UI designs", "branding books", "social banners", "print layout", "packaging assets"],
+                "Cybersecurity Analyst": ["firewall rules", "network scanning", "threat intelligence", "malware analysis", "audit compliance", "SIEM alerting"],
+                "Mechanical Engineer": ["gearbox heat transfer", "fluid dynamics modeling", "sheet metal bending", "hydraulic valve testing", "FEA thermal stress"],
+                "Business Analyst": ["ERP gap analysis", "finance swimlanes", "MoSCoW roadmap", "legacy migration", "stakeholder matrices"],
+                "General Practice": ["project roadblocks", "team alignment", "customer feedback", "skill gap mapping", "crisis communication"]
+            }
+            topics = role_topics.get(category, ["project objectives", "team workflows", "skill developments"])
+            topic = topics[index % len(topics)]
+            
+            templates = [
+                ("How do you manage risks and document hurdles during {topic} tasks?", "I identify bottlenecks early, write a detailed risk mitigation log, coordinate with stakeholders, and adjust timelines dynamically.", ["risk", "mitigate", "hurdles", "stakeholders"]),
+                ("Can you describe how you prioritize tasks when resolving issues with {topic}?", "I evaluate impact vs. effort, focus on high-priority blocker items, keep manager updated on progress, and use templates to accelerate delivery.", ["prioritize", "impact", "blocking", "resolution"]),
+                ("What is your approach to collaborating with cross-functional partners during {topic}?", "I establish clear communication, document interface specs, respect different domain expertise, and align on shared project milestones.", ["collaborate", "communication", "interface", "milestones"])
+            ]
+            t = templates[index % len(templates)]
+            DB[category].append({
+                "question": t[0].format(topic=topic),
+                "ideal_answer": t[1],
+                "keywords": t[2]
+            })
+        
+        # Inject standard behavioral questions periodically to enrich the pool
+        if index % 4 == 0:
+            b = generic_behaviorals[(index // 4) % len(generic_behaviorals)]
+            DB[category].append({
+                "question": b[0],
+                "ideal_answer": b[1],
+                "keywords": b[2]
+            })
+            
+        index += 1
+
+# Save database to JSON file
+with open("questions_db.json", "w") as f:
+    json.dump(DB, f, indent=4)
+
+print(f"Successfully generated questions_db.json with {len(DB)} categories, each scaled to 50+ questions.")

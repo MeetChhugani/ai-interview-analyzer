@@ -78,7 +78,10 @@ def transcribe_audio(audio_file_path: str, duration_seconds: float) -> Dict[str,
             text = MOCK_TRANSCRIPTS[_mock_index % len(MOCK_TRANSCRIPTS)]
             _mock_index += 1
 
-    return analyze_text(text, duration_seconds)
+    analysis = analyze_text(text, duration_seconds)
+    audio_metrics = analyze_audio_file(audio_file_path)
+    analysis["audio_metrics"] = audio_metrics
+    return analysis
 
 def analyze_text(text: str, duration_seconds: float) -> Dict[str, Any]:
     """
@@ -142,3 +145,82 @@ def analyze_text(text: str, duration_seconds: float) -> Dict[str, Any]:
         "filler_ratio": filler_ratio,
         "suggestions": suggestions
     }
+
+def analyze_audio_file(file_path: str) -> Dict[str, float]:
+    """
+    Analyzes the WAV audio file to compute RMS energy volume, volume standard deviation (tone modulation),
+    and zero-crossing rate variance.
+    """
+    import wave
+    import struct
+    import numpy as np
+
+    default_metrics = {"rms": 0.05, "rms_std": 0.03, "zcr_var": 0.01}
+    if not file_path or not os.path.exists(file_path):
+        return default_metrics
+
+    try:
+        with wave.open(file_path, 'rb') as wf:
+            n_channels = wf.getnchannels()
+            sampwidth = wf.getsampwidth()
+            framerate = wf.getframerate()
+            n_frames = wf.getnframes()
+            
+            if n_frames == 0:
+                return {"rms": 0.0, "rms_std": 0.0, "zcr_var": 0.0}
+            
+            data = wf.readframes(n_frames)
+            
+            if sampwidth == 1:
+                fmt = f"{n_frames * n_channels}B"
+                samples = np.array(struct.unpack(fmt, data), dtype=np.float32) - 128.0
+            elif sampwidth == 2:
+                fmt = f"<{n_frames * n_channels}h"
+                samples = np.array(struct.unpack(fmt, data), dtype=np.float32)
+            elif sampwidth == 4:
+                fmt = f"<{n_frames * n_channels}i"
+                samples = np.array(struct.unpack(fmt, data), dtype=np.float32)
+            else:
+                return default_metrics
+            
+            if n_channels > 1:
+                samples = samples.reshape(-1, n_channels)
+                samples = samples.mean(axis=1)
+                
+            if len(samples) == 0:
+                return {"rms": 0.0, "rms_std": 0.0, "zcr_var": 0.0}
+                
+            max_val = np.max(np.abs(samples))
+            if max_val > 0:
+                samples = samples / max_val
+            
+            frame_size = int(framerate * 0.05)
+            if frame_size == 0:
+                frame_size = 1024
+            
+            rms_values = []
+            zcrs = []
+            for i in range(0, len(samples), frame_size):
+                chunk = samples[i:i+frame_size]
+                if len(chunk) > 0:
+                    rms = np.sqrt(np.mean(chunk**2))
+                    rms_values.append(rms)
+                if len(chunk) > 1:
+                    zcr = np.mean(np.abs(np.diff(np.sign(chunk))) > 0)
+                    zcrs.append(zcr)
+            
+            rms_values = np.array(rms_values)
+            zcrs = np.array(zcrs)
+            
+            avg_rms = float(np.mean(rms_values)) if len(rms_values) > 0 else 0.0
+            std_rms = float(np.std(rms_values)) if len(rms_values) > 0 else 0.0
+            var_zcr = float(np.var(zcrs)) if len(zcrs) > 0 else 0.0
+            
+            return {
+                "rms": round(avg_rms, 4),
+                "rms_std": round(std_rms, 4),
+                "zcr_var": round(var_zcr, 4)
+            }
+    except Exception as e:
+        print(f"Error analyzing WAV file: {e}")
+        return default_metrics

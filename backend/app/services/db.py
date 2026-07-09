@@ -72,9 +72,24 @@ def init_db():
         )
     """)
     
+    # 5. Run migrations for new score fields if they don't exist
+    try:
+        cursor.execute("ALTER TABLE reports ADD COLUMN speech_clarity_score INTEGER")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cursor.execute("ALTER TABLE reports ADD COLUMN confidence_score INTEGER")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cursor.execute("ALTER TABLE reports ADD COLUMN engagement_score INTEGER")
+    except sqlite3.OperationalError:
+        pass
+
     conn.commit()
     conn.close()
     print("SQLite database successfully initialized.")
+
 
 def hash_password(password: str, salt: str = "ai_interview_salt_99") -> str:
     return hashlib.sha256((password + salt).encode('utf-8')).hexdigest()
@@ -238,8 +253,8 @@ def save_report(session_id: str, user_id: str, report_data: Dict[str, Any]) -> N
         """INSERT OR REPLACE INTO reports (
             session_id, user_id, overall_score, posture_score, eye_contact_score, 
             filler_words_count, speaking_pace_wpm, relevance_score, tips, 
-            emotion_summary, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            emotion_summary, created_at, speech_clarity_score, confidence_score, engagement_score
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             session_id,
             user_id,
@@ -251,7 +266,10 @@ def save_report(session_id: str, user_id: str, report_data: Dict[str, Any]) -> N
             report_data.get("relevance_score", 0),
             tips_json,
             emotions_json,
-            created_at
+            created_at,
+            report_data.get("speech_clarity_score", 0),
+            report_data.get("confidence_score", 0),
+            report_data.get("engagement_score", 0)
         )
     )
     
@@ -265,7 +283,8 @@ def get_report_by_session(session_id: str) -> Optional[Dict[str, Any]]:
     cursor.execute(
         """SELECT r.session_id, r.user_id, r.overall_score, r.posture_score, r.eye_contact_score, 
                   r.filler_words_count, r.speaking_pace_wpm, r.relevance_score, r.tips, 
-                  r.emotion_summary, r.created_at, s.category
+                  r.emotion_summary, r.created_at, s.category,
+                  r.speech_clarity_score, r.confidence_score, r.engagement_score
            FROM reports r
            JOIN sessions s ON r.session_id = s.id
            WHERE r.session_id = ?""",
@@ -275,19 +294,23 @@ def get_report_by_session(session_id: str) -> Optional[Dict[str, Any]]:
     conn.close()
     
     if row:
+        row_dict = dict(row)
         return {
-            "session_id": row["session_id"],
-            "user_id": row["user_id"],
-            "category": row["category"],
-            "overall_score": row["overall_score"],
-            "posture_score": row["posture_score"],
-            "eye_contact_score": row["eye_contact_score"],
-            "filler_words_count": row["filler_words_count"],
-            "speaking_pace_wpm": row["speaking_pace_wpm"],
-            "relevance_score": row["relevance_score"],
-            "tips": json.loads(row["tips"]) if row["tips"] else [],
-            "emotions": json.loads(row["emotion_summary"]) if row["emotion_summary"] else {},
-            "created_at": row["created_at"]
+            "session_id": row_dict["session_id"],
+            "user_id": row_dict["user_id"],
+            "category": row_dict["category"],
+            "overall_score": row_dict["overall_score"],
+            "posture_score": row_dict["posture_score"],
+            "eye_contact_score": row_dict["eye_contact_score"],
+            "filler_words_count": row_dict["filler_words_count"],
+            "speaking_pace_wpm": row_dict["speaking_pace_wpm"],
+            "relevance_score": row_dict["relevance_score"],
+            "tips": json.loads(row_dict["tips"]) if row_dict["tips"] else [],
+            "emotions": json.loads(row_dict["emotion_summary"]) if row_dict["emotion_summary"] else {},
+            "created_at": row_dict["created_at"],
+            "speech_clarity_score": row_dict.get("speech_clarity_score") if row_dict.get("speech_clarity_score") is not None else row_dict["relevance_score"],
+            "confidence_score": row_dict.get("confidence_score") if row_dict.get("confidence_score") is not None else row_dict["posture_score"],
+            "engagement_score": row_dict.get("engagement_score") if row_dict.get("engagement_score") is not None else row_dict["posture_score"]
         }
     return None
 
@@ -297,7 +320,8 @@ def get_user_history(user_id: str) -> List[Dict[str, Any]]:
     cursor.execute(
         """SELECT r.session_id, r.user_id, r.overall_score, r.posture_score, r.eye_contact_score, 
                   r.filler_words_count, r.speaking_pace_wpm, r.relevance_score, r.tips, 
-                  r.emotion_summary, r.created_at, s.category
+                  r.emotion_summary, r.created_at, s.category,
+                  r.speech_clarity_score, r.confidence_score, r.engagement_score
            FROM reports r
            JOIN sessions s ON r.session_id = s.id
            WHERE r.user_id = ?
@@ -309,18 +333,22 @@ def get_user_history(user_id: str) -> List[Dict[str, Any]]:
     
     history = []
     for row in rows:
+        row_dict = dict(row)
         history.append({
-            "session_id": row["session_id"],
-            "user_id": row["user_id"],
-            "category": row["category"],
-            "overall_score": row["overall_score"],
-            "posture_score": row["posture_score"],
-            "eye_contact_score": row["eye_contact_score"],
-            "filler_words_count": row["filler_words_count"],
-            "speaking_pace_wpm": row["speaking_pace_wpm"],
-            "relevance_score": row["relevance_score"],
-            "tips": json.loads(row["tips"]) if row["tips"] else [],
-            "emotions": json.loads(row["emotion_summary"]) if row["emotion_summary"] else {},
-            "created_at": row["created_at"]
+            "session_id": row_dict["session_id"],
+            "user_id": row_dict["user_id"],
+            "category": row_dict["category"],
+            "overall_score": row_dict["overall_score"],
+            "posture_score": row_dict["posture_score"],
+            "eye_contact_score": row_dict["eye_contact_score"],
+            "filler_words_count": row_dict["filler_words_count"],
+            "speaking_pace_wpm": row_dict["speaking_pace_wpm"],
+            "relevance_score": row_dict["relevance_score"],
+            "tips": json.loads(row_dict["tips"]) if row_dict["tips"] else [],
+            "emotions": json.loads(row_dict["emotion_summary"]) if row_dict["emotion_summary"] else {},
+            "created_at": row_dict["created_at"],
+            "speech_clarity_score": row_dict.get("speech_clarity_score") if row_dict.get("speech_clarity_score") is not None else row_dict["relevance_score"],
+            "confidence_score": row_dict.get("confidence_score") if row_dict.get("confidence_score") is not None else row_dict["posture_score"],
+            "engagement_score": row_dict.get("engagement_score") if row_dict.get("engagement_score") is not None else row_dict["posture_score"]
         })
     return history

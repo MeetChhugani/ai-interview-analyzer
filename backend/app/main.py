@@ -1,7 +1,6 @@
-
-
 import uuid
 import os
+import json
 import shutil
 import random
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
@@ -35,140 +34,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Predefined interview questions per category (expanded pool for randomization)
-QUESTIONS_DB = {
-    "Software Engineer": [
-        "Can you explain the difference between a Stateful and Stateless widget in Flutter?",
-        "What is the difference between a REST API and WebSockets, and when would you use each?",
-        "How do you handle state management in a large-scale mobile application?",
-        "What is the role of an index in a database, and how does it speed up queries?",
-        "Can you explain the concept of Clean Architecture and why it is useful?",
-        "What is the difference between synchronous and asynchronous programming, and how do you handle concurrency?",
-        "How do you optimize the performance of a slow mobile or web application?",
-        "What are the key differences between SQL and NoSQL databases?"
-    ],
-    "Product Manager": [
-        "How do you decide what features to prioritize in a product roadmap when multiple stakeholders disagree?",
-        "Can you describe a time when a product launch failed, and what you learned from it?",
-        "How do you define and measure success for a new feature?",
-        "How do you conduct user research to identify pain points for a new product?",
-        "How would you handle a situation where engineering says a key feature cannot be built on time?",
-        "What metrics would you track for a ride-sharing app like Uber to measure passenger retention?",
-        "Can you explain how you would design an MVP (Minimum Viable Product) for a new social media application?",
-        "How do you balance long-term product vision with short-term business demands?"
-    ],
-    "HR Manager": [
-        "How do you handle conflict resolution between two high-performing team members who refuse to collaborate?",
-        "What strategies do you use to improve employee retention in a high-turnover industry?",
-        "How do you evaluate cultural fit during an interview?",
-        "How do you handle a situation where an employee complains about their manager's behavior?",
-        "What steps would you take to design and implement a new diversity and inclusion program?",
-        "How do you balance supporting the company's business goals with advocating for employee well-being?",
-        "What is your approach to conducting performance reviews and giving constructive feedback?",
-        "How do you manage onboarding for a fully remote team to make them feel integrated?"
-    ],
-    "Data Analyst": [
-        "What is the difference between supervised and unsupervised learning, and can you give an example of each?",
-        "How do you handle missing or noisy data in a dataset before performing analysis?",
-        "Can you explain the difference between a join and a union in SQL?",
-        "What is the difference between correlation and causation, and why is it important in analysis?",
-        "How do you choose between a bar chart, a line chart, and a scatter plot for data visualization?",
-        "What are Type I and Type II errors in hypothesis testing?",
-        "Can you explain the difference between A/B testing and multivariate testing?",
-        "How do you communicate complex technical insights to non-technical business stakeholders?"
-    ],
-    "Android Developer": [
-        "Can you explain the Android Activity lifecycle and how to handle configuration changes like screen rotation?",
-        "What is the difference between a Service, an IntentService, and WorkManager in Android?",
-        "How do you optimize memory usage and prevent memory leaks in an Android application?",
-        "What is your experience with Jetpack Compose vs. traditional XML layouts?"
-    ],
-    "Investment Banker": [
-        "Can you walk me through the three main financial valuation methodologies and when to use each?",
-        "How does a $10 increase in depreciation affect the three financial statements?",
-        "What is the difference between WACC and Cost of Equity, and how do you calculate them?",
-        "Can you explain the key phases of an M&A sell-side advisory process?"
-    ],
-    "Sales Representative": [
-        "How do you handle a prospect who repeatedly objects to the price of your product?",
-        "What is your process for qualifying leads and identifying high-value opportunities?",
-        "Can you describe a time you lost a major sales deal, and what you learned from it?",
-        "How do you build trust and maintain long-term relationships with key accounts?"
-    ],
-    "Marketing Specialist": [
-        "How do you design and execute a multi-channel digital marketing campaign from scratch?",
-        "What metrics do you prioritize to track and evaluate the performance of an email marketing campaign?",
-        "Can you explain the difference between SEO and SEM, and how they work together?",
-        "How do you conduct competitor analysis to identify gaps in market positioning?"
-    ],
-    "Nurse": [
-        "How do you prioritize patient care when managing a heavy workload under high-pressure conditions?",
-        "Can you describe a time you noticed a critical change in a patient's vital signs and what action you took?",
-        "How do you handle a situation where a patient or their family member becomes aggressive or uncooperative?",
-        "What is your approach to educating patients about post-discharge care and medication compliance?"
-    ],
-    "Doctor": [
-        "Can you walk me through your diagnostic process when a patient presents with vague, non-specific symptoms?",
-        "How do you handle delivering difficult or bad news to a patient and their family?",
-        "What is your approach to collaborative care when working with multidisciplinary medical teams?",
-        "How do you balance patient advocacy with institutional guidelines and resources?"
-    ],
-    "Research Scientist": [
-        "How do you design a robust scientific experiment to minimize bias and control for confounding variables?",
-        "Can you explain how you handle experimental failures or results that contradict your hypothesis?",
-        "What is your experience with statistical analysis software and interpreting complex datasets?",
-        "How do you translate complex scientific findings into clear reports for non-scientific stakeholders?"
-    ],
-    "Customer Support Specialist": [
-        "How do you handle an extremely frustrated customer who is shouting about a product failure?",
-        "What steps do you take when you do not know the answer to a customer's technical question?",
-        "How do you balance efficiency (speed) with empathy (quality) when resolving customer tickets?",
-        "Can you describe a time you turned a negative customer experience into a positive one?"
-    ],
-    "Project Manager": [
-        "How do you manage project scope creep when a client repeatedly requests out-of-scope features?",
-        "What methodologies (Agile, Waterfall, Scrum) do you prefer, and how do you choose between them?",
-        "How do you handle conflict or performance issues within a cross-functional project team?",
-        "What metrics do you track to evaluate project health, budget compliance, and timeline status?"
-    ],
-    "Teacher / Educator": [
-        "How do you differentiate your instruction to meet the diverse learning needs of students in your classroom?",
-        "What strategies do you use to establish a positive classroom environment and manage behavior?",
-        "How do you handle communication with a parent who is upset about their child's grade or behavior?",
-        "What is your approach to using technology to enhance student engagement and learning outcomes?"
-    ],
-    "Hotel Manager": [
-        "How do you handle a situation where the hotel is overbooked and a guest with a reservation arrives?",
-        "What strategies do you implement to maximize occupancy rates and RevPAR during low seasons?",
-        "How do you motivate and manage diverse hospitality staff to maintain high service standards?",
-        "Can you describe how you handle a severe guest complaint regarding room cleanliness or service quality?"
-    ],
-    "Chartered Accountant": [
-        "How do you ensure compliance with changing tax laws and financial reporting standards?",
-        "Can you explain the difference between deferred tax assets and deferred tax liabilities?",
-        "How would you handle a situation where you discover a material error in a previously audited financial statement?"
-    ],
-    "Graphic Designer": [
-        "How do you translate a client's vague brand vision into concrete visual design elements?",
-        "Can you walk me through your creative process when working under tight deadlines?",
-        "How do you handle negative feedback from a client on a design you are highly passionate about?"
-    ],
-    "Cybersecurity Analyst": [
-        "How do you investigate and mitigate a suspected data breach or intrusion in progress?",
-        "What is the difference between symmetric and asymmetric encryption, and when is each used?",
-        "How do you balance strong security controls with maintaining user convenience and system performance?"
-    ],
-    "Mechanical Engineer": [
-        "How do you perform stress analysis and choose materials for a component operating in high-temperature environments?",
-        "Can you describe a time when a prototype failed during testing, and how you diagnosed the root cause?",
-        "What is your experience with CAD software and designing for manufacturability (DFM)?"
-    ],
-    "Business Analyst": [
-        "How do you gather, document, and prioritize business requirements from stakeholders with conflicting needs?",
-        "Can you explain the difference between a functional requirement and a non-functional requirement?",
-        "What methodologies (like BPMN or UML) do you use to map out and optimize business processes?"
-    ]
-}
+# Load questions and ideal answers from dynamic JSON database file
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+QUESTIONS_DB_PATH = os.path.join(CURRENT_DIR, "services", "questions_db.json")
+
+try:
+    with open(QUESTIONS_DB_PATH, "r") as f:
+        QUESTIONS_POOL = json.load(f)
+except Exception as e:
+    print(f"Error loading questions_db.json: {e}")
+    QUESTIONS_POOL = {}
 
 # Global in-memory storage for active session metrics
 active_sessions: Dict[str, Dict[str, Any]] = {}
@@ -185,28 +60,43 @@ def health_check():
 def create_session(session_data: SessionCreate):
     session_id = str(uuid.uuid4())
     
+    # Retrieve count requested, bounded 1 to 20
+    count = session_data.question_count or 5
+    count = max(1, min(20, count))
+    
     if session_data.custom_questions and len(session_data.custom_questions) > 0:
         questions = session_data.custom_questions
+        ideal_answers = ["" for _ in questions]
     else:
         # Retrieve question pool for the category (or generic fallback)
-        question_pool = QUESTIONS_DB.get(
-            session_data.category, 
-            [
-                "Can you tell me about yourself and your background?",
-                "What is your greatest professional achievement?",
-                "Where do you see yourself in five years?",
-                "What are your key strengths and weaknesses?",
-                "How do you handle pressure and tight deadlines?"
-            ]
-        )
+        pool = QUESTIONS_POOL.get(session_data.category)
+        if not pool:
+            # Fallback to General Practice
+            pool = QUESTIONS_POOL.get("General Practice", [])
         
-        # Randomly select 3 unique questions from the pool
-        questions = random.sample(question_pool, min(len(question_pool), 3))
+        # Ensure we have at least 50 questions in the pool to satisfy the "at least 50 questions in the queue" requirement.
+        # If pool size is less than 50, we combine it with General Practice questions to reach at least 50.
+        # We copy to prevent mutating the original global dict pool
+        pool = list(pool)
+        if len(pool) < 50:
+            fallback_pool = QUESTIONS_POOL.get("General Practice", [])
+            existing_questions = {q["question"] for q in pool}
+            for q in fallback_pool:
+                if q["question"] not in existing_questions:
+                    pool.append(q)
+                if len(pool) >= 50:
+                    break
+        
+        # Randomly select requested number of unique questions from the pool
+        sampled = random.sample(pool, min(len(pool), count))
+        questions = [q["question"] for q in sampled]
+        ideal_answers = [q.get("ideal_answer", "") for q in sampled]
     
     active_sessions[session_id] = {
         "category": session_data.category,
         "questions": questions,
         "answers": ["" for _ in range(len(questions))],
+        "ideal_answers": ideal_answers,
         "frames": [],
         "speech": [],
         "emotions": [],
@@ -304,14 +194,46 @@ def get_session_report(session_id: str):
     try:
         saved_report = db.get_report_by_session(session_id)
         if saved_report:
-            # Reconstruct schemas-compliant dict
-            # Pydantic v2 requires scores_breakdown and metrics to match schemas
+            # Reconstruct schemas-compliant dict matching ScoresBreakdown (speech_clarity, confidence, eye_contact, engagement)
+            speech_clarity = saved_report.get("speech_clarity_score") if saved_report.get("speech_clarity_score") is not None else saved_report["relevance_score"]
+            confidence = saved_report.get("confidence_score") if saved_report.get("confidence_score") is not None else saved_report["posture_score"]
+            eye_contact = saved_report.get("eye_contact_score") if saved_report.get("eye_contact_score") is not None else 80
+            engagement = saved_report.get("engagement_score") if saved_report.get("engagement_score") is not None else saved_report["overall_score"]
+
+            feedback = [
+                {
+                    "category": "Speech Clarity",
+                    "status": "Excellent" if speech_clarity >= 80 else ("Good" if speech_clarity >= 60 else "Needs Improvement"),
+                    "score": speech_clarity,
+                    "detail": "Spoke clearly with comfortable conversational pacing." if speech_clarity >= 80 else "Practice taking brief pauses to minimize filler word usage."
+                },
+                {
+                    "category": "Confidence",
+                    "status": "Excellent" if confidence >= 80 else ("Good" if confidence >= 60 else "Needs Improvement"),
+                    "score": confidence,
+                    "detail": "Maintained highly stable visual presence and vocal energy." if confidence >= 80 else "Focus on sit upright and project authority."
+                },
+                {
+                    "category": "Eye Contact",
+                    "status": "Excellent" if eye_contact >= 80 else ("Good" if eye_contact >= 60 else "Needs Improvement"),
+                    "score": eye_contact,
+                    "detail": "Excellent eye contact, looked directly at the camera." if eye_contact >= 80 else "Try to look at the webcam lens more consistently."
+                },
+                {
+                    "category": "Engagement",
+                    "status": "Excellent" if engagement >= 80 else ("Good" if engagement >= 60 else "Needs Improvement"),
+                    "score": engagement,
+                    "detail": "Highly interactive response style and keyword coverage." if engagement >= 80 else "Practice structuring answers with more specific technical details."
+                }
+            ]
+
             return {
                 "overall_score": saved_report["overall_score"],
                 "scores_breakdown": {
-                    "confidence": int(saved_report["overall_score"] * 0.95),
-                    "communication": saved_report["relevance_score"],
-                    "behavioral": saved_report["posture_score"]
+                    "speech_clarity": speech_clarity,
+                    "confidence": confidence,
+                    "eye_contact": eye_contact,
+                    "engagement": engagement
                 },
                 "metrics": {
                     "eye_contact_ratio": saved_report["eye_contact_score"] / 100.0,
@@ -322,22 +244,10 @@ def get_session_report(session_id: str):
                     "filler_words_total": saved_report["filler_words_count"]
                 },
                 "emotions_timeline": list(saved_report["emotions"].keys()) if saved_report["emotions"] else ["confident"],
-                "feedback": [
-                    {
-                        "category": "Eye Contact",
-                        "status": "Good" if saved_report["eye_contact_score"] >= 75 else "Needs Improvement",
-                        "score": saved_report["eye_contact_score"],
-                        "detail": "Maintained steady gaze during the conversation." if saved_report["eye_contact_score"] >= 75 else "Try to look at the camera more frequently."
-                    },
-                    {
-                        "category": "Posture",
-                        "status": "Good" if saved_report["posture_score"] >= 80 else "Slouching Warning",
-                        "score": saved_report["posture_score"],
-                        "detail": "Sat straight with level shoulders." if saved_report["posture_score"] >= 80 else "Align your shoulders to show more confidence."
-                    }
-                ],
+                "feedback": feedback,
                 "transcript": "Report fetched from server-side history.",
-                "question_evaluations": []
+                "question_evaluations": [],
+                "ai_coaching_summary": None # summary can be dynamically regenerated if needed or loaded from database tips
             }
     except Exception as e:
         print(f"Error checking saved report: {e}")
@@ -359,7 +269,7 @@ def get_session_report(session_id: str):
             eye_contact_score = int(report.get("metrics", {}).get("eye_contact_ratio", 1.0) * 100)
             filler_words_count = report.get("metrics", {}).get("filler_words_total", 0)
             speaking_pace_wpm = report.get("metrics", {}).get("wpm", 130)
-            relevance_score = report.get("scores_breakdown", {}).get("communication", 80)
+            relevance_score = report.get("scores_breakdown", {}).get("engagement", 80) # legacy map
             
             tips_list = [f.get("detail", "") for f in report.get("feedback", [])]
             emotions_timeline = report.get("emotions_timeline", [])
@@ -375,7 +285,10 @@ def get_session_report(session_id: str):
                 "speaking_pace_wpm": speaking_pace_wpm,
                 "relevance_score": relevance_score,
                 "tips": tips_list,
-                "emotions": emotions_summary
+                "emotions": emotions_summary,
+                "speech_clarity_score": report.get("scores_breakdown", {}).get("speech_clarity", 80),
+                "confidence_score": report.get("scores_breakdown", {}).get("confidence", 80),
+                "engagement_score": report.get("scores_breakdown", {}).get("engagement", 80)
             })
         except Exception as e:
             print(f"Error saving report to DB: {e}")

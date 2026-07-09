@@ -22,13 +22,14 @@ class ApiService {
   ApiService({String? baseUrl}) : _customBaseUrl = baseUrl;
 
   /// Starts a new evaluation session for a specific job category.
-  Future<Map<String, dynamic>> createSession(String category, {List<String>? customQuestions, String? userId}) async {
+  Future<Map<String, dynamic>> createSession(String category, {List<String>? customQuestions, String? userId, int? questionCount}) async {
     final url = Uri.parse('$baseUrl/session');
     try {
       final body = {
         'category': category,
         if (customQuestions != null) 'custom_questions': customQuestions,
         if (userId != null) 'user_id': userId,
+        if (questionCount != null) 'question_count': questionCount,
       };
       final response = await http.post(
         url,

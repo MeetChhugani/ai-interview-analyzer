@@ -220,11 +220,13 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildBreakdownBar('Confidence', breakdown['confidence'] as int, const Color(0xFF0D3A31)),
-                          const SizedBox(height: 16),
-                          _buildBreakdownBar('Communication', breakdown['communication'] as int, const Color(0xFFD8B28A)),
-                          const SizedBox(height: 16),
-                          _buildBreakdownBar('Behavioral', breakdown['behavioral'] as int, const Color(0xFFE5B595)),
+                          _buildBreakdownBar('Speech Clarity', (breakdown['speech_clarity'] ?? 0) as int, const Color(0xFF8B5CF6)),
+                          const SizedBox(height: 12),
+                          _buildBreakdownBar('Confidence', (breakdown['confidence'] ?? 0) as int, const Color(0xFF0D3A31)),
+                          const SizedBox(height: 12),
+                          _buildBreakdownBar('Eye Contact', (breakdown['eye_contact'] ?? 0) as int, const Color(0xFFD8B28A)),
+                          const SizedBox(height: 12),
+                          _buildBreakdownBar('Engagement', (breakdown['engagement'] ?? 0) as int, const Color(0xFFE5B595)),
                         ],
                       ),
                     ),
@@ -318,15 +320,18 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
                     final eval = qEvals[index];
-                    final score = eval['quality_score'] as int;
-                    final question = eval['question'] as String;
-                    final answer = eval['user_answer'] as String;
-                    final qFeedback = eval['feedback'] as String;
+                    final score = eval['quality_score'] as int? ?? 0;
+                    final question = eval['question'] as String? ?? '';
+                    final answer = eval['user_answer'] as String? ?? '';
+                    final qFeedback = eval['feedback'] as String? ?? '';
+                    final idealAnswer = eval['ideal_answer'] as String? ?? '';
+                    final correctnessScore = eval['correctness_score'] as int? ?? score;
+                    final correctnessFeedback = eval['correctness_feedback'] as String? ?? '';
 
                     Color scoreColor = const Color(0xFF0D3A31);
-                    if (score < 60) {
+                    if (correctnessScore < 55) {
                       scoreColor = Colors.redAccent;
-                    } else if (score < 80) {
+                    } else if (correctnessScore < 80) {
                       scoreColor = const Color(0xFFD8B28A);
                     }
 
@@ -363,7 +368,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Text(
-                                  '$score%',
+                                  '$correctnessScore%',
                                   style: TextStyle(
                                     color: scoreColor,
                                     fontWeight: FontWeight.bold,
@@ -388,7 +393,43 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                               height: 1.4,
                             ),
                           ),
-                          const SizedBox(height: 14),
+                          // Ideal Answer Card
+                          if (idealAnswer.isNotEmpty) ...[
+                            const SizedBox(height: 14),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFAF7F0), // cream
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFF0D3A31).withOpacity(0.08)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Row(
+                                    children: [
+                                      Icon(Icons.vpn_key_rounded, color: Color(0xFFD8B28A), size: 16),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'Ideal Answer Key:',
+                                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0D3A31)),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    idealAnswer,
+                                    style: const TextStyle(
+                                      fontSize: 12.5,
+                                      color: Color(0xFF5A6561),
+                                      height: 1.45,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 12),
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
@@ -402,13 +443,23 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                                 const Icon(Icons.tips_and_updates_rounded, color: Color(0xFFD8B28A), size: 18),
                                 const SizedBox(width: 10),
                                 Expanded(
-                                  child: Text(
-                                    qFeedback,
-                                    style: const TextStyle(
-                                      color: Color(0xFF5A6561),
-                                      fontSize: 12.5,
-                                      height: 1.4,
-                                    ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'AI Grading Match:',
+                                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0D3A31)),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        correctnessFeedback.isNotEmpty ? correctnessFeedback : qFeedback,
+                                        style: const TextStyle(
+                                          color: Color(0xFF5A6561),
+                                          fontSize: 12.5,
+                                          height: 1.4,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
@@ -483,52 +534,86 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
     );
   }
 
+  String _getQualitativeLabel(int score) {
+    if (score >= 80) return 'Excellent';
+    if (score >= 60) return 'Good';
+    return 'Needs Improvement';
+  }
+
+  Color _getQualitativeColor(int score) {
+    if (score >= 80) return const Color(0xFF0D3A31);
+    if (score >= 60) return const Color(0xFFD8B28A);
+    return Colors.redAccent;
+  }
+
   Widget _buildOverallRing(int overall) {
-    return AnimatedBuilder(
-      animation: _progressController,
-      builder: (context, child) {
-        final animatedScore = (_progressController.value * overall).toInt();
-        return SizedBox(
-          width: 100,
-          height: 100,
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: CircularProgressIndicator(
-                  value: _progressController.value * (overall / 100.0),
-                  strokeWidth: 8,
-                  backgroundColor: const Color(0xFF0D3A31).withOpacity(0.08),
-                  valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF0D3A31)),
-                ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AnimatedBuilder(
+          animation: _progressController,
+          builder: (context, child) {
+            final animatedScore = (_progressController.value * overall).toInt();
+            return SizedBox(
+              width: 100,
+              height: 100,
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: CircularProgressIndicator(
+                      value: _progressController.value * (overall / 100.0),
+                      strokeWidth: 8,
+                      backgroundColor: const Color(0xFF0D3A31).withOpacity(0.08),
+                      valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF0D3A31)),
+                    ),
+                  ),
+                  Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '$animatedScore%',
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0D3A31),
+                          ),
+                        ),
+                        const Text(
+                          'OVERALL',
+                          style: TextStyle(
+                            fontSize: 8,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF5A6561),
+                            letterSpacing: 1,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                ],
               ),
-              Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '$animatedScore%',
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF0D3A31),
-                      ),
-                    ),
-                    const Text(
-                      'OVERALL',
-                      style: TextStyle(
-                        fontSize: 8,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF5A6561),
-                        letterSpacing: 1,
-                      ),
-                    ),
-                  ],
-                ),
-              )
-            ],
+            );
+          },
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: _getQualitativeColor(overall).withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _getQualitativeColor(overall).withOpacity(0.3)),
           ),
-        );
-      },
+          child: Text(
+            _getQualitativeLabel(overall),
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+              color: _getQualitativeColor(overall),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

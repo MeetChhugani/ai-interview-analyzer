@@ -5,6 +5,7 @@ class SessionCreate(BaseModel):
     category: str = Field(..., example="Software Engineer")
     custom_questions: Optional[List[str]] = Field(default=None, example=["Tell me about yourself"])
     user_id: Optional[str] = Field(default=None, example="user-uuid-123")
+    question_count: Optional[int] = Field(default=5, example=5)
 
 class UserSignup(BaseModel):
     email: str
@@ -41,6 +42,9 @@ class QuestionEvaluation(BaseModel):
     user_answer: str = Field(default="", alias="user_answer")
     quality_score: int
     feedback: str
+    ideal_answer: str = Field(default="", alias="ideal_answer")
+    correctness_score: int = Field(default=0, alias="correctness_score")
+    correctness_feedback: str = Field(default="", alias="correctness_feedback")
 
     # Support string types in Pydantic v2
     class Config:
@@ -70,9 +74,10 @@ class FeedbackItem(BaseModel):
     detail: str
 
 class ScoresBreakdown(BaseModel):
+    speech_clarity: int
     confidence: int
-    communication: int
-    behavioral: int
+    eye_contact: int
+    engagement: int
 
 class MetricsDetail(BaseModel):
     eye_contact_ratio: float
