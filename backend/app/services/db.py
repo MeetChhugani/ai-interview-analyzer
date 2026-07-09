@@ -260,7 +260,7 @@ def save_report(session_id: str, user_id: str, report_data: Dict[str, Any]) -> N
             filler_words_count, speaking_pace_wpm, relevance_score, tips, 
             emotion_summary, created_at, speech_clarity_score, confidence_score, engagement_score,
             question_evaluations
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             session_id,
             user_id,

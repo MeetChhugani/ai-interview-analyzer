@@ -526,8 +526,35 @@ QUESTION_KEYWORDS = {
     ]
 }
 
+def generate_local_ideal_answer(q: str) -> str:
+    import re
+    q_lower = q.lower()
+    if "flutter" in q_lower or "widget" in q_lower:
+        return "An ideal answer should explain your experience with Flutter development, describe widgets and state management solutions (such as Riverpod or BLoC) you have utilized, and outline key design patterns or testing strategies you implement in mobile applications."
+    elif "experience" in q_lower or "background" in q_lower or "tell me about" in q_lower or "yourself" in q_lower:
+        return "An ideal answer should summarize your professional background, highlight your core technical skills and achievements, and explain why your career goals align with this position."
+    elif "bug" in q_lower or "challenge" in q_lower or "problem" in q_lower or "difficult" in q_lower:
+        return "An ideal answer should describe a specific challenge or technical bug you encountered, explain the step-by-step troubleshooting methodology you used to resolve it, and highlight what you learned or how you improved the system's resilience."
+    elif "api" in q_lower or "websocket" in q_lower or "rest" in q_lower or "database" in q_lower:
+        return "An ideal answer should clarify the core architectural concepts (such as HTTP statelessness, persistent socket connections, or indexing structures), explain when to use each approach, and discuss the trade-offs regarding performance and scalability."
+    elif "conflict" in q_lower or "disagree" in q_lower or "team" in q_lower or "collaborate" in q_lower:
+        return "An ideal answer should outline a structured approach to conflict resolution, emphasizing active listening, empathy, objective analysis, and collaborative compromise to keep projects moving forward."
+    elif "mvp" in q_lower or "product" in q_lower or "prioritize" in q_lower:
+        return "An ideal answer should outline a product prioritization framework (like MoSCoW or RICE), detail the process of defining core user value, and explain how to validate an MVP through structured user feedback loops."
+    
+    # Generic intelligent fallback
+    words = [w.strip("?,.:;!").lower() for w in q.split() if len(w) > 4]
+    stop_words = {"about", "would", "should", "could", "their", "there", "other", "which", "where"}
+    keywords = [w for w in words if w not in stop_words][:3]
+    if keywords:
+        key_str = " and ".join(keywords)
+        return f"An ideal answer should directly address the prompt, demonstrating deep domain knowledge regarding {key_str}, outlining clear technical steps, and sharing concrete examples from your professional experience."
+    
+    return "The response should demonstrate key industry knowledge, clear articulation of technical steps, and structured examples from prior experience."
+
 def evaluate_answers(questions: list, answers: list, ideal_answers: list = None) -> list:
     import httpx
+    import re
     evals = []
     if not questions:
         return evals
@@ -544,9 +571,11 @@ def evaluate_answers(questions: list, answers: list, ideal_answers: list = None)
         
         # Try lookup in QUESTIONS_POOL if still empty
         if not ideal_ans:
+            clean_q_target = re.sub(r"[^a-zA-Z0-9]", "", q).lower().strip()
             for cat_list in QUESTIONS_POOL.values():
                 for item in cat_list:
-                    if item.get("question") == q:
+                    clean_item_q = re.sub(r"[^a-zA-Z0-9]", "", item.get("question", "")).lower().strip()
+                    if clean_item_q == clean_q_target:
                         ideal_ans = item.get("ideal_answer", "")
                         break
                 if ideal_ans:
@@ -554,7 +583,7 @@ def evaluate_answers(questions: list, answers: list, ideal_answers: list = None)
         
         # Default fallback if no preloaded answer exists
         if not ideal_ans:
-            ideal_ans = "The response should demonstrate key industry knowledge, clear articulation of technical steps, and structured examples from prior experience."
+            ideal_ans = generate_local_ideal_answer(q)
 
         # If answer is empty or too short
         if not ans_clean or len(ans_clean) < 12:
@@ -571,9 +600,11 @@ def evaluate_answers(questions: list, answers: list, ideal_answers: list = None)
 
         # 2. Extract keywords for local scoring & feedback fallback
         keywords = []
+        clean_q_target = re.sub(r"[^a-zA-Z0-9]", "", q).lower().strip()
         for cat_list in QUESTIONS_POOL.values():
             for item in cat_list:
-                if item.get("question") == q:
+                clean_item_q = re.sub(r"[^a-zA-Z0-9]", "", item.get("question", "")).lower().strip()
+                if clean_item_q == clean_q_target:
                     keywords = item.get("keywords", [])
                     break
             if keywords:
