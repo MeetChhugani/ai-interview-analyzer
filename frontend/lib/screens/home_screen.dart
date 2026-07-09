@@ -378,6 +378,139 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     }
   }
 
+  void _showCustomQuestionsDialog() {
+    final textController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) {
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: AlertDialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+              side: const BorderSide(color: Color(0xFFFAF7F0), width: 1),
+            ),
+            title: const Row(
+              children: [
+                Icon(Icons.edit_note_rounded, color: Color(0xFF0D3A31), size: 28),
+                SizedBox(width: 10),
+                Text(
+                  'Custom Interview',
+                  style: TextStyle(color: Color(0xFF0D3A31), fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Type or paste your custom interview questions below (one question per line).',
+                  style: TextStyle(color: Color(0xFF5A6561), fontSize: 13, height: 1.4),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: textController,
+                  maxLines: 5,
+                  style: const TextStyle(color: Color(0xFF0D3A31), fontSize: 14),
+                  decoration: InputDecoration(
+                    labelText: 'Questions List',
+                    labelStyle: const TextStyle(color: Color(0xFF0D3A31)),
+                    hintText: 'e.g.\nWhat is your experience with Flutter?\nTell me about a challenging bug you resolved.',
+                    hintStyle: TextStyle(color: const Color(0xFF0D3A31).withOpacity(0.3)),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: const Color(0xFF0D3A31).withOpacity(0.12)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFF0D3A31)),
+                    ),
+                    filled: true,
+                    fillColor: const Color(0xFFF8F4EA).withOpacity(0.5),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel', style: TextStyle(color: Color(0xFF5A6561))),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0D3A31),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () {
+                  final text = textController.text.trim();
+                  if (text.isNotEmpty) {
+                    final questions = text
+                        .split('\n')
+                        .map((q) => q.trim())
+                        .where((q) => q.isNotEmpty)
+                        .toList();
+                    if (questions.isNotEmpty) {
+                      Navigator.pop(context);
+                      _startCustomQuestionsSession(questions);
+                    }
+                  }
+                },
+                child: const Text('Start Practice', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _startCustomQuestionsSession(List<String> questions) async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final user = await AuthStore.getAuthUser();
+      final userId = user?['id'];
+      
+      final sessionData = await _apiService.createSession(
+        'Custom Practice', 
+        customQuestions: questions,
+        userId: userId,
+      );
+      final sessionId = sessionData['session_id'];
+
+      if (mounted) {
+        Navigator.pushNamed(
+          context,
+          '/interview',
+          arguments: {
+            'sessionId': sessionId,
+            'category': 'Custom Practice',
+            'questions': List<String>.from(sessionData['questions'] ?? []),
+          },
+        ).then((_) => _loadProfileAndHistory());
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error initializing session: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
   void _showSettingsDialog() {
     final textController = TextEditingController(text: ApiService.serverIp);
     showDialog(
@@ -673,9 +806,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               const SizedBox(height: 12),
               _buildPracticeModeCard(
                 title: 'Custom Interview',
-                subtitle: 'Practice key common questions',
+                subtitle: 'Practice your own questions',
                 icon: Icons.edit_note_outlined,
-                onTap: () {}, // Handled by expanded list below
+                onTap: _showCustomQuestionsDialog,
               ),
               const SizedBox(height: 32),
               
