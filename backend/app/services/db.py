@@ -85,6 +85,10 @@ def init_db():
         cursor.execute("ALTER TABLE reports ADD COLUMN engagement_score INTEGER")
     except sqlite3.OperationalError:
         pass
+    try:
+        cursor.execute("ALTER TABLE reports ADD COLUMN question_evaluations TEXT")
+    except sqlite3.OperationalError:
+        pass
 
     conn.commit()
     conn.close()
@@ -248,13 +252,15 @@ def save_report(session_id: str, user_id: str, report_data: Dict[str, Any]) -> N
     # Serialize json elements
     tips_json = json.dumps(report_data.get("tips", []))
     emotions_json = json.dumps(report_data.get("emotions", {}))
+    evaluations_json = json.dumps(report_data.get("question_evaluations", []))
     
     cursor.execute(
         """INSERT OR REPLACE INTO reports (
             session_id, user_id, overall_score, posture_score, eye_contact_score, 
             filler_words_count, speaking_pace_wpm, relevance_score, tips, 
-            emotion_summary, created_at, speech_clarity_score, confidence_score, engagement_score
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            emotion_summary, created_at, speech_clarity_score, confidence_score, engagement_score,
+            question_evaluations
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             session_id,
             user_id,
@@ -269,7 +275,8 @@ def save_report(session_id: str, user_id: str, report_data: Dict[str, Any]) -> N
             created_at,
             report_data.get("speech_clarity_score", 0),
             report_data.get("confidence_score", 0),
-            report_data.get("engagement_score", 0)
+            report_data.get("engagement_score", 0),
+            evaluations_json
         )
     )
     
@@ -284,7 +291,8 @@ def get_report_by_session(session_id: str) -> Optional[Dict[str, Any]]:
         """SELECT r.session_id, r.user_id, r.overall_score, r.posture_score, r.eye_contact_score, 
                   r.filler_words_count, r.speaking_pace_wpm, r.relevance_score, r.tips, 
                   r.emotion_summary, r.created_at, s.category,
-                  r.speech_clarity_score, r.confidence_score, r.engagement_score
+                  r.speech_clarity_score, r.confidence_score, r.engagement_score,
+                  r.question_evaluations
            FROM reports r
            JOIN sessions s ON r.session_id = s.id
            WHERE r.session_id = ?""",
@@ -295,6 +303,9 @@ def get_report_by_session(session_id: str) -> Optional[Dict[str, Any]]:
     
     if row:
         row_dict = dict(row)
+        # Handle cases where column was added but contains null
+        evals_str = row_dict.get("question_evaluations")
+        evals = json.loads(evals_str) if evals_str else []
         return {
             "session_id": row_dict["session_id"],
             "user_id": row_dict["user_id"],
@@ -310,7 +321,8 @@ def get_report_by_session(session_id: str) -> Optional[Dict[str, Any]]:
             "created_at": row_dict["created_at"],
             "speech_clarity_score": row_dict.get("speech_clarity_score") if row_dict.get("speech_clarity_score") is not None else row_dict["relevance_score"],
             "confidence_score": row_dict.get("confidence_score") if row_dict.get("confidence_score") is not None else row_dict["posture_score"],
-            "engagement_score": row_dict.get("engagement_score") if row_dict.get("engagement_score") is not None else row_dict["posture_score"]
+            "engagement_score": row_dict.get("engagement_score") if row_dict.get("engagement_score") is not None else row_dict["posture_score"],
+            "question_evaluations": evals
         }
     return None
 
@@ -321,7 +333,8 @@ def get_user_history(user_id: str) -> List[Dict[str, Any]]:
         """SELECT r.session_id, r.user_id, r.overall_score, r.posture_score, r.eye_contact_score, 
                   r.filler_words_count, r.speaking_pace_wpm, r.relevance_score, r.tips, 
                   r.emotion_summary, r.created_at, s.category,
-                  r.speech_clarity_score, r.confidence_score, r.engagement_score
+                  r.speech_clarity_score, r.confidence_score, r.engagement_score,
+                  r.question_evaluations
            FROM reports r
            JOIN sessions s ON r.session_id = s.id
            WHERE r.user_id = ?
@@ -334,6 +347,8 @@ def get_user_history(user_id: str) -> List[Dict[str, Any]]:
     history = []
     for row in rows:
         row_dict = dict(row)
+        evals_str = row_dict.get("question_evaluations")
+        evals = json.loads(evals_str) if evals_str else []
         history.append({
             "session_id": row_dict["session_id"],
             "user_id": row_dict["user_id"],
@@ -349,6 +364,7 @@ def get_user_history(user_id: str) -> List[Dict[str, Any]]:
             "created_at": row_dict["created_at"],
             "speech_clarity_score": row_dict.get("speech_clarity_score") if row_dict.get("speech_clarity_score") is not None else row_dict["relevance_score"],
             "confidence_score": row_dict.get("confidence_score") if row_dict.get("confidence_score") is not None else row_dict["posture_score"],
-            "engagement_score": row_dict.get("engagement_score") if row_dict.get("engagement_score") is not None else row_dict["posture_score"]
+            "engagement_score": row_dict.get("engagement_score") if row_dict.get("engagement_score") is not None else row_dict["posture_score"],
+            "question_evaluations": evals
         })
     return history

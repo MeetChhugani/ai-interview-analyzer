@@ -47,6 +47,7 @@ class _InterviewScreenState extends State<InterviewScreen> with TickerProviderSt
   Timer? _ttsBackupTimer;
   bool _isVoiceRecordingActive = false;
   bool _isSpeakingModeActive = false;
+  DateTime? _recordingStartTime;
 
   // Real-time HUD and Alert states
   String? _currentAlert;
@@ -254,6 +255,7 @@ class _InterviewScreenState extends State<InterviewScreen> with TickerProviderSt
     if (!_isSpeakingModeActive) return;
     if (_isVoiceRecordingActive) return;
     _isVoiceRecordingActive = true;
+    _recordingStartTime = DateTime.now();
     
     try {
       if (await _audioRecorder.hasPermission()) {
@@ -273,31 +275,12 @@ class _InterviewScreenState extends State<InterviewScreen> with TickerProviderSt
               }
             });
 
-        final initFileName = 'chunk_init_${DateTime.now().millisecondsSinceEpoch}.wav';
+        final initFileName = 'response_${_currentQuestionIndex}_${DateTime.now().millisecondsSinceEpoch}.wav';
         final initFilePath = '${tempDir.path}/$initFileName';
         await _audioRecorder.start(
           const RecordConfig(encoder: AudioEncoder.wav), 
           path: initFilePath
         );
-
-        _audioUploadTimer?.cancel();
-        _audioUploadTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
-          if (!_isRecording) return;
-          
-          final path = await _audioRecorder.stop();
-          if (path != null) {
-            _apiService.sendAudio(widget.sessionId, path, 5.0, _currentQuestionIndex).catchError((e) {
-              return <String, dynamic>{};
-            });
-          }
-          
-          final nextFileName = 'chunk_${DateTime.now().millisecondsSinceEpoch}.wav';
-          final nextFilePath = '${tempDir.path}/$nextFileName';
-          await _audioRecorder.start(
-            const RecordConfig(encoder: AudioEncoder.wav), 
-            path: nextFilePath
-          );
-        });
       }
     } catch (_) {
       _isVoiceRecordingActive = false;
@@ -306,7 +289,6 @@ class _InterviewScreenState extends State<InterviewScreen> with TickerProviderSt
 
   Future<void> _stopRecordingForQuestion() async {
     _isVoiceRecordingActive = false;
-    _audioUploadTimer?.cancel();
     _amplitudeSubscription?.cancel();
     try {
       if (await _audioRecorder.isRecording()) {
@@ -322,16 +304,20 @@ class _InterviewScreenState extends State<InterviewScreen> with TickerProviderSt
 
   Future<void> _triggerChunkUploadAndNext() async {
     final activeIndex = _currentQuestionIndex;
-    _audioUploadTimer?.cancel();
     _amplitudeSubscription?.cancel();
     
     if (_isSpeakingModeActive) {
-      final path = await _audioRecorder.stop();
-      if (path != null) {
-        _apiService.sendAudio(widget.sessionId, path, 5.0, activeIndex).catchError((e) {
-          return <String, dynamic>{};
-        });
-      }
+      try {
+        final path = await _audioRecorder.stop();
+        if (path != null) {
+          final duration = _recordingStartTime != null 
+              ? DateTime.now().difference(_recordingStartTime!).inSeconds.toDouble() 
+              : 10.0;
+          _apiService.sendAudio(widget.sessionId, path, duration, activeIndex).catchError((e) {
+            return <String, dynamic>{};
+          });
+        }
+      } catch (_) {}
     }
 
     setState(() {
@@ -347,15 +333,19 @@ class _InterviewScreenState extends State<InterviewScreen> with TickerProviderSt
   }
 
   Future<void> _endInterview() async {
-    _audioUploadTimer?.cancel();
     _amplitudeSubscription?.cancel();
     if (_isSpeakingModeActive) {
-      final path = await _audioRecorder.stop();
-      if (path != null) {
-        _apiService.sendAudio(widget.sessionId, path, 5.0, _currentQuestionIndex).catchError((e) {
-          return <String, dynamic>{};
-        });
-      }
+      try {
+        final path = await _audioRecorder.stop();
+        if (path != null) {
+          final duration = _recordingStartTime != null 
+              ? DateTime.now().difference(_recordingStartTime!).inSeconds.toDouble() 
+              : 10.0;
+          _apiService.sendAudio(widget.sessionId, path, duration, _currentQuestionIndex).catchError((e) {
+            return <String, dynamic>{};
+          });
+        }
+      } catch (_) {}
     }
 
     setState(() {
@@ -368,12 +358,13 @@ class _InterviewScreenState extends State<InterviewScreen> with TickerProviderSt
     
     _sessionTimer?.cancel();
     _frameUploadTimer?.cancel();
-    _audioUploadTimer?.cancel();
     _amplitudeSubscription?.cancel();
     
     try {
       _flutterTts?.stop();
-      await _audioRecorder.stop();
+      if (await _audioRecorder.isRecording()) {
+        await _audioRecorder.stop();
+      }
     } catch (_) {}
 
     // Mock progress loading timer
@@ -387,7 +378,8 @@ class _InterviewScreenState extends State<InterviewScreen> with TickerProviderSt
       }
     });
 
-    await Future.delayed(const Duration(seconds: 2));
+    // Wait 4.5 seconds to ensure final audio file is uploaded and transcribed on the server
+    await Future.delayed(const Duration(milliseconds: 4500));
 
     try {
       final reportData = await _apiService.getReport(widget.sessionId);

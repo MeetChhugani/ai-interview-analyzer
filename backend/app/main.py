@@ -246,7 +246,7 @@ def get_session_report(session_id: str):
                 "emotions_timeline": list(saved_report["emotions"].keys()) if saved_report["emotions"] else ["confident"],
                 "feedback": feedback,
                 "transcript": "Report fetched from server-side history.",
-                "question_evaluations": [],
+                "question_evaluations": saved_report.get("question_evaluations", []),
                 "ai_coaching_summary": None # summary can be dynamically regenerated if needed or loaded from database tips
             }
     except Exception as e:
@@ -288,7 +288,8 @@ def get_session_report(session_id: str):
                 "emotions": emotions_summary,
                 "speech_clarity_score": report.get("scores_breakdown", {}).get("speech_clarity", 80),
                 "confidence_score": report.get("scores_breakdown", {}).get("confidence", 80),
-                "engagement_score": report.get("scores_breakdown", {}).get("engagement", 80)
+                "engagement_score": report.get("scores_breakdown", {}).get("engagement", 80),
+                "question_evaluations": report.get("question_evaluations", [])
             })
         except Exception as e:
             print(f"Error saving report to DB: {e}")
