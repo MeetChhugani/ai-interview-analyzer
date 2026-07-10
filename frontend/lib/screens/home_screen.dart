@@ -998,57 +998,84 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       final date = item['date'] ?? 'Just now';
                       final category = item['category'] ?? 'General Prep';
                       
+                      final sessionId = item['session_id'];
                       return Container(
                         margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(color: const Color(0xFF0D3A31).withOpacity(0.06)),
                         ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF0D3A31).withOpacity(0.1),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(Icons.assignment_outlined, color: Color(0xFF0D3A31), size: 22),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(16),
+                            onTap: () {
+                              if (sessionId != null) {
+                                Navigator.pushNamed(
+                                  context,
+                                  '/report',
+                                  arguments: {
+                                    'sessionId': sessionId,
+                                    'category': category,
+                                  },
+                                );
+                              }
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Row(
                                 children: [
-                                  Text(
-                                    category,
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0D3A31)),
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF0D3A31).withOpacity(0.1),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.assignment_outlined, color: Color(0xFF0D3A31), size: 22),
                                   ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    date,
-                                    style: TextStyle(fontSize: 12, color: const Color(0xFF5A6561).withOpacity(0.6)),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          category,
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0D3A31)),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          date,
+                                          style: TextStyle(fontSize: 12, color: const Color(0xFF5A6561).withOpacity(0.6)),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF0D3A31).withOpacity(0.08),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      '$score%',
+                                      style: const TextStyle(
+                                        color: Color(0xFF0D3A31),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Icon(
+                                    Icons.arrow_forward_ios_rounded,
+                                    color: const Color(0xFF0D3A31).withOpacity(0.2),
+                                    size: 14,
                                   ),
                                 ],
                               ),
                             ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF0D3A31).withOpacity(0.08),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                '$score%',
-                                style: const TextStyle(
-                                  color: Color(0xFF0D3A31),
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 15,
-                                ),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       );
                     },

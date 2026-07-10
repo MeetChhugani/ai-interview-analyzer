@@ -561,8 +561,40 @@ def evaluate_answers(questions: list, answers: list, ideal_answers: list = None)
 
     api_key = os.getenv("OPENAI_API_KEY")
 
+    # Mapping of technical keywords to their common synonyms/related conceptual terms
+    SYNONYMS = {
+        "setstate": ["setstate", "set state", "rebuild", "update", "redraw", "notify"],
+        "mutable": ["mutable", "change", "changing", "modify", "var", "update"],
+        "immutable": ["immutable", "const", "constant", "static", "cannot change", "unchanged", "read only"],
+        "rebuild": ["rebuild", "reload", "redraw", "update", "refresh"],
+        "lifecycle": ["lifecycle", "initstate", "dispose", "create", "destroy", "stages"],
+        "state": ["state", "data", "value", "variables", "status"],
+        "http": ["http", "request", "response", "get", "post", "url", "client", "server"],
+        "connection": ["connection", "link", "socket", "connect", "stream", "channel"],
+        "real-time": ["real-time", "live", "chat", "instant", "push", "continuous"],
+        "handshake": ["handshake", "establish", "protocol", "connect"],
+        "persistent": ["persistent", "keepalive", "open", "always", "continuous"],
+        "stateless": ["stateless", "no state", "independent", "sessionless"],
+        "provider": ["provider", "riverpod", "bloc", "redux", "getx", "state management"],
+        "bloc": ["bloc", "cubit", "stream", "sink", "event", "state"],
+        "riverpod": ["riverpod", "provider", "ref", "state"],
+        "redux": ["redux", "store", "action", "reducer", "state"],
+        "index": ["index", "indices", "search", "lookup", "speed", "key"],
+        "lookup": ["lookup", "search", "find", "scan", "seek"],
+        "speed": ["speed", "fast", "perform", "optimize", "quick"],
+        "scan": ["scan", "sequential", "search", "all rows"],
+        "btree": ["btree", "b-tree", "tree", "binary search", "structure"],
+        "performance": ["performance", "speed", "fast", "efficient", "overhead"],
+        "class": ["class", "object", "oop", "blueprint"],
+        "inheritance": ["inherit", "extend", "parent", "child", "subclass"],
+        "polymorphism": ["polymorphism", "override", "overload", "many forms"],
+        "encapsulation": ["encapsulate", "private", "getter", "setter", "hide"],
+        "abstraction": ["abstract", "interface", "hide details", "contract"]
+    }
+
     for idx, (q, ans) in enumerate(zip(questions, answers)):
         ans_clean = ans.strip()
+        ans_lower = ans_clean.lower()
         
         # 1. Resolve ideal answer
         ideal_ans = ""
@@ -581,7 +613,6 @@ def evaluate_answers(questions: list, answers: list, ideal_answers: list = None)
                 if ideal_ans:
                     break
         
-        # Default fallback if no preloaded answer exists
         if not ideal_ans:
             ideal_ans = generate_local_ideal_answer(q)
 
@@ -598,7 +629,7 @@ def evaluate_answers(questions: list, answers: list, ideal_answers: list = None)
             })
             continue
 
-        # 2. Extract keywords for local scoring & feedback fallback
+        # 2. Extract keywords for this question
         keywords = []
         clean_q_target = re.sub(r"[^a-zA-Z0-9]", "", q).lower().strip()
         for cat_list in QUESTIONS_POOL.values():
@@ -615,8 +646,21 @@ def evaluate_answers(questions: list, answers: list, ideal_answers: list = None)
             stop_words = {"their", "there", "about", "would", "should", "could", "these", "those", "other", "where", "which"}
             keywords = list({w for w in clean_ideal_words if len(w) > 4 and w not in stop_words})[:5]
 
-        matched_keys = [k for k in keywords if k.lower() in ans_clean.lower()]
-        
+        # Calculate keyword match ratio using the synonym dictionary
+        matched_keys = []
+        for k in keywords:
+            k_lower = k.lower()
+            matched = False
+            if k_lower in ans_lower:
+                matched = True
+            elif k_lower in SYNONYMS:
+                for syn in SYNONYMS[k_lower]:
+                    if syn in ans_lower:
+                        matched = True
+                        break
+            if matched:
+                matched_keys.append(k)
+
         correctness_score = 0
         correctness_feedback = ""
         
@@ -660,45 +704,50 @@ def evaluate_answers(questions: list, answers: list, ideal_answers: list = None)
             except Exception as e:
                 print(f"OpenAI answer comparison failed, falling back to local grading: {e}")
 
-        # Local Fallback Path (if OpenAI key missing, failed, or timed out)
+        # Local Fallback Path (highly lenient, supportive of improvisation)
         if correctness_score == 0:
-            cand_words = {w.strip(".,;:?!()\"'").lower() for w in ans_clean.split()}
-            ideal_words = {w.strip(".,;:?!()\"'").lower() for w in ideal_ans.split()}
-            stop_words = {"the", "a", "an", "and", "or", "but", "is", "are", "was", "were", "to", "for", "in", "on", "at", "by", "of", "with", "that", "this", "it", "you", "i", "we", "they", "he", "she", "have", "has", "had", "do", "does", "did", "as", "from", "at"}
+            # 1. Base Score depending on length of candidate answer (up to 55 points)
+            word_count = len(ans_clean.split())
+            if word_count >= 60:
+                base_score = 55
+            elif word_count >= 30:
+                base_score = 45
+            elif word_count >= 15:
+                base_score = 30
+            else:
+                base_score = 15
+
+            # 2. Keyword Coverage score (up to 45 points)
+            if keywords:
+                keyword_match_ratio = len(matched_keys) / len(keywords)
+                keyword_score = int(keyword_match_ratio * 45)
+            else:
+                keyword_score = 30
+
+            correctness_score = base_score + keyword_score
             
-            cand_clean = cand_words - stop_words
-            ideal_clean = ideal_words - stop_words
-            
-            overlap = cand_clean.intersection(ideal_clean)
-            
-            keyword_ratio = len(matched_keys) / len(keywords) if keywords else 0.0
-            overlap_ratio = len(overlap) / len(ideal_clean) if ideal_clean else 0.0
-            
-            correctness_score = int((keyword_ratio * 60) + (overlap_ratio * 40))
-            
-            if len(ans_clean) > 100:
-                correctness_score = min(100, correctness_score + 15)
-            elif len(ans_clean) < 40:
-                correctness_score = max(10, correctness_score - 10)
+            # Apply an extra bonus of +10 if they matched at least 2 key terms/synonyms
+            if len(matched_keys) >= 2:
+                correctness_score = min(100, correctness_score + 10)
                 
-            correctness_score = max(10, min(100, correctness_score))
+            correctness_score = max(15, min(100, correctness_score))
             
             missing_keys = [k for k in keywords if k not in matched_keys]
             if correctness_score >= 80:
-                correctness_feedback = f"Excellent match! Your response is highly accurate and discussed key concepts including: {', '.join(matched_keys)}."
+                correctness_feedback = f"Excellent explanation! You demonstrated solid understanding by naturally addressing core points like: {', '.join(matched_keys)}."
             elif correctness_score >= 55:
-                correctness_feedback = f"Moderate accuracy. You hit key points like {', '.join(matched_keys)}, but you missed details regarding: {', '.join(missing_keys[:2]) if missing_keys else 'the core domain'}. Try to explain these key concepts."
+                correctness_feedback = f"Good response. You addressed key details including {', '.join(matched_keys)}. To make your answer even stronger, try to also mention: {', '.join(missing_keys[:2]) if missing_keys else 'additional technical details'}."
             else:
-                correctness_feedback = f"Low match. To hit the ideal response, please incorporate key terminology such as: {', '.join(keywords[:3])}."
+                correctness_feedback = f"Your answer covered the basics but is a bit brief. Focus on elaborating more and using key terms such as: {', '.join(keywords[:3])}."
 
         # Quality score aligns directly with accuracy correctness score
         quality_score = correctness_score
 
         # Main overall feedback
         if quality_score >= 80:
-            main_feedback = f"Excellent technical answer! You clearly addressed the prompt and demonstrated solid understanding of the concepts."
+            main_feedback = "Excellent technical answer! You clearly addressed the prompt and demonstrated solid understanding of the concepts."
         elif quality_score >= 55:
-            main_feedback = f"Good answer, but could be more complete. Try to elaborate on technical details and explain how the components interact."
+            main_feedback = "Good answer, but could be more complete. Try to elaborate on technical details and explain how the components interact."
         else:
             main_feedback = "Your answer was somewhat generic or off-topic. Focus on using specific industry terms and structuring your explanation clearly."
 

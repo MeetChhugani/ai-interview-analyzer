@@ -1,6 +1,6 @@
 # AI-Powered Mock Interview Platform 🚀
 
-An advanced, end-to-end mobile and backend solution designed to help candidates master their interview skills. By combining real-time computer vision analysis with natural language processing (NLP), the platform provides live behavioral diagnostics and detailed post-interview telemetry.
+An advanced, end-to-end mobile and backend solution designed to help candidates master their interview skills. By combining real-time computer vision analysis with natural language processing (NLP), the platform provides live behavioral diagnostics, interactive question configuration, and detailed post-interview telemetry.
 
 ---
 
@@ -17,14 +17,20 @@ An advanced, end-to-end mobile and backend solution designed to help candidates 
 *   **Filler Word Counter**: Highlights verbal tics (e.g., *"um"*, *"uh"*, *"like"*, *"so"*) to help users speak more concisely.
 *   **Technical Keyword Relevance**: Computes response relevance by matching transcripts against a job-role keyword database.
 
-### 3. Voice Coach & Audio Streaming
-*   **Asynchronous Audio Pipeline**: Streams recorded audio in 5-second chunks to the API for minimal latency.
-*   **Interactive TTS Guide**: A Text-to-Speech system reads questions aloud.
-*   **Device Lifecycle Optimization**: Built-in recovery timers prevent voice transition dropouts on custom Android overlays (like Xiaomi MIUI).
+### 3. Dynamic Question Pools & Custom Practice
+*   **50+ Questions per Category**: Over 450+ curated job-field questions and ideal answers covering Software Engineering, PM, Data Analytics, cybersecurity, HR, Finance, and more.
+*   **Interactive Session Setup**: A premium "Interview Settings" dialog allowing candidates to dynamically select job categories and customize interview lengths (1 to 20 questions).
+*   **Custom Questions Mode**: Paste or type custom questions to run fully tailored practice sessions.
 
-### 4. Interactive Performance Reports
-*   **Aggregated Scoring**: Computes overall performance metrics based on visual presence, lexical structure, and speaking pace.
-*   **History Logs**: Locally persists user profiles and past session data.
+### 4. Lenient Comparative Grading & Synonym Support
+*   **Synonym-Aware Matching**: Recognizes alternative expressions and industry terms (e.g., accepting *"rebuild"* or *"update"* for *"setState"*; *"cannot change"* for *"immutable"*).
+*   **Depth-Based Base Score**: Evaluates answer quality based on explanation depth and length (up to 55 points), rewarding natural improvisation and detailed elaborations rather than strict rote memorization.
+*   **Contextual Ideal Answer Keys**: Dynamically generates targeted ideal answers for custom questions to prevent boilerplate responses.
+*   **Dual-Path Pipeline**: Automatically fallbacks to the lenient local grading engine if no OpenAI API Key is configured on the host.
+
+### 5. Interactive Performance Reports & History Reviews
+*   **Detailed telemetry dashboard**: Color-coded correctness match percentages, visual progress charts, and itemized question-by-question analysis.
+*   **Interactive History Reports**: Saved reports in the history database are fully clickable, allowing candidates to review and drill down into past performances at any time.
 
 ---
 
@@ -42,6 +48,7 @@ graph TD
 *   **Frontend**: Flutter (Dart)
 *   **Backend**: FastAPI (Python)
 *   **ML Engines**: Google MediaPipe (Face Mesh, Pose, Hands), Google Speech Recognition, Custom Lexical NLP
+*   **Database**: SQLite (saves history and detailed report telemetry)
 
 ---
 
