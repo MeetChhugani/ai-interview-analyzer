@@ -42,6 +42,11 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
+      // Clear previous cached profile/history/auth to avoid bleed-through
+      await ProfileStore.clearProfile();
+      await ProfileStore.clearHistory();
+      await AuthStore.clearAuthUser();
+
       final user = await _apiService.login(email, password);
       await AuthStore.saveAuthUser(user);
       
