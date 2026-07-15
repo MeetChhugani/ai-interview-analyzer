@@ -51,6 +51,13 @@ class _InterviewScreenState extends State<InterviewScreen> with TickerProviderSt
 
   // Real-time HUD and Alert states
   String? _currentAlert;
+  int _noFaceFrames = 0;
+  int _faceFrames = 0;
+  int _noEyeContactFrames = 0;
+  int _eyeContactFrames = 0;
+  int _poorPostureFrames = 0;
+  int _goodPostureFrames = 0;
+
   Color _hudColor = const Color(0xFF0D3A31); // Forest green default
   bool _faceDetected = true;
   bool _eyeContact = true;
@@ -227,24 +234,63 @@ class _InterviewScreenState extends State<InterviewScreen> with TickerProviderSt
           _postureScore = response['posture_score'] ?? 100;
           _emotion = response['dominant_emotion'] ?? 'confident';
           
-          _hudColor = _faceDetected 
-              ? (_eyeContact ? const Color(0xFF0D3A31) : const Color(0xFFD8B28A)) 
-              : Colors.redAccent;
-          
-          final alert = response['alert'];
-          if (alert != null && alert.isNotEmpty) {
-            _currentAlert = alert;
-            _alertController.forward();
-            Timer(const Duration(seconds: 3), () {
-              if (mounted && _currentAlert == alert) {
-                _alertController.reverse().then((_) {
+          // 1. Process Face Warning with Hysteresis
+          if (!_faceDetected) {
+            _noFaceFrames++;
+            _faceFrames = 0;
+          } else {
+            _faceFrames++;
+            _noFaceFrames = 0;
+          }
+
+          // 2. Process Eye Contact Warning with Hysteresis
+          if (_faceDetected && !_eyeContact) {
+            _noEyeContactFrames++;
+            _eyeContactFrames = 0;
+          } else {
+            _eyeContactFrames++;
+            _noEyeContactFrames = 0;
+          }
+
+          // 3. Process Posture Warning with Hysteresis
+          if (_faceDetected && _postureScore < 70) {
+            _poorPostureFrames++;
+            _goodPostureFrames = 0;
+          } else {
+            _goodPostureFrames++;
+            _poorPostureFrames = 0;
+          }
+
+          // Determine target alert using hysteresis thresholds (e.g. 3 consecutive bad frames)
+          String? targetAlert;
+          if (_noFaceFrames >= 3) {
+            targetAlert = "Position your face in front of the camera";
+          } else if (_noEyeContactFrames >= 4) {
+            targetAlert = "Try to maintain direct eye contact with the camera";
+          } else if (_poorPostureFrames >= 4) {
+            targetAlert = "Sit straight and level your shoulders";
+          }
+
+          // Smooth alert transitions
+          if (targetAlert != _currentAlert) {
+            if (targetAlert != null) {
+              _currentAlert = targetAlert;
+              _alertController.forward();
+            } else {
+              _alertController.reverse().then((_) {
+                if (mounted) {
                   setState(() {
                     _currentAlert = null;
                   });
-                });
-              }
-            });
+                }
+              });
+            }
           }
+
+          // Update HUD outline indicator color
+          _hudColor = _faceDetected 
+              ? (_eyeContact ? const Color(0xFF0D3A31) : const Color(0xFFD8B28A)) 
+              : Colors.redAccent;
         });
       }
     } catch (_) {}
