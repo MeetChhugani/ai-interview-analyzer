@@ -978,7 +978,7 @@ class _InterviewScreenState extends State<InterviewScreen> with TickerProviderSt
                   side: const BorderSide(color: Color(0xFF0D3A31), width: 1.5),
                 ),
                 onPressed: () {
-                  Navigator.pushReplacementNamed(context, '/home');
+                  Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
                 },
                 child: const Text(
                   'Go to Dashboard',

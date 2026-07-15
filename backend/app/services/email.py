@@ -4,10 +4,22 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 def send_otp_email(receiver_email: str, otp: str) -> bool:
+    # Dynamically load env on each request to pick up live credentials edits without restarts
+    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".env")
+    if os.path.exists(env_path):
+        with open(env_path, "r") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, val = line.split("=", 1)
+                    os.environ[key.strip()] = val.strip()
+
     smtp_email = os.getenv("SMTP_EMAIL")
     smtp_password = os.getenv("SMTP_PASSWORD")
-    if not smtp_email or not smtp_password:
-        print(f"WARNING: SMTP_EMAIL or SMTP_PASSWORD is not configured. Skipped sending OTP email to {receiver_email}. OTP Code: {otp}")
+    
+    # Check for empty or placeholder credentials
+    if not smtp_email or not smtp_password or smtp_email == "yourname@gmail.com" or "xxxx" in smtp_password:
+        print(f"WARNING: SMTP_EMAIL or SMTP_PASSWORD is not configured or contains placeholder values. Skipped sending OTP email to {receiver_email}. OTP Code: {otp}")
         return False
         
     try:

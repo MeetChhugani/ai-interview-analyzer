@@ -167,7 +167,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
                   Row(
                     children: [
                       GestureDetector(
-                        onTap: () => Navigator.of(context).popUntil((r) => r.isFirst),
+                        onTap: () => Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false),
                         child: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
@@ -514,7 +514,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
             child: Padding(
               padding: const EdgeInsets.only(left: 24.0, right: 24.0, top: 30.0, bottom: 60.0),
               child: ElevatedButton(
-                onPressed: () => Navigator.of(context).popUntil((r) => r.isFirst),
+                onPressed: () => Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   backgroundColor: const Color(0xFF0D3A31),
