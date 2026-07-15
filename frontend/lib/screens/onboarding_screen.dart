@@ -34,6 +34,30 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final List<String> _availableSkills = ['Flutter', 'Dart', 'Firebase', 'Python', 'SQL', 'Git', 'HTML/CSS', 'Machine Learning'];
 
   @override
+  void initState() {
+    super.initState();
+    _loadAuthUserData();
+  }
+
+  Future<void> _loadAuthUserData() async {
+    final user = await AuthStore.getAuthUser();
+    if (user != null) {
+      setState(() {
+        if (user['name'] != null && user['name'].toString().isNotEmpty) {
+          _nameController.text = user['name'].toString();
+        }
+        if (user['email'] != null && user['email'].toString().isNotEmpty) {
+          _emailController.text = user['email'].toString();
+        }
+        // Skip redundant name/email entry steps if they are already populated from registration
+        if (_nameController.text.isNotEmpty && _emailController.text.isNotEmpty) {
+          _currentStep = 3; 
+        }
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
@@ -47,6 +71,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       if (_nameController.text.trim().isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Please enter your name')),
+        );
+        return;
+      }
+    }
+    if (_currentStep == 3) {
+      if (_phoneController.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter your phone number')),
         );
         return;
       }
@@ -407,11 +439,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               value: _education,
               items: [
                 'B.Tech - Computer Science',
+                'B.Tech - Information Technology',
+                'B.Tech - Mechanical Engineering',
+                'B.Tech - Electrical Engineering',
+                'B.Tech - Civil Engineering',
                 'M.Tech - Computer Science',
-                'MBA - Marketing',
-                'B.Sc - Information Technology',
                 'MCA',
-                'Bachelor of Arts'
+                'BCA',
+                'M.Sc - Computer Science',
+                'B.Sc - Computer Science',
+                'B.Sc - Information Technology',
+                'MBA - Finance',
+                'MBA - Human Resources',
+                'MBA - Marketing',
+                'B.Com',
+                'M.Com',
+                'BBA',
+                'Bachelor of Arts',
+                'Master of Arts',
+                'Ph.D'
               ],
               onChanged: (val) => setState(() => _education = val!),
             ),
@@ -456,6 +502,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               _buildFieldLabel('Enter Custom Job Title'),
               _buildTextField(_customRoleController, 'e.g. Mechanical Engineer, Pilot, Chef'),
             ],
+            const SizedBox(height: 20),
+            _buildFieldLabel('Phone Number'),
+            _buildTextField(_phoneController, '+91 98765 43210', keyboardType: TextInputType.phone),
           ],
         );
       case 4: // Setup 3: Resume (Screen 6)

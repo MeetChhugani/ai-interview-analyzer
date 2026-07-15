@@ -16,6 +16,20 @@ from app.services.speech import transcribe_audio
 from app.services.scoring import calculate_final_scores
 from app.services import db
 
+# Load local .env file variables securely
+def load_env():
+    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    if os.path.exists(env_path):
+        with open(env_path, "r") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, val = line.split("=", 1)
+                    os.environ[key.strip()] = val.strip()
+        print("Loaded local .env environment variables successfully.")
+
+load_env()
+
 # Initialize SQLite database on startup
 db.init_db()
 
@@ -56,6 +70,174 @@ os.makedirs(TEMP_MEDIA_DIR, exist_ok=True)
 def health_check():
     return {"status": "healthy", "service": "AI Interview Analyzer API"}
 
+def generate_questions_for_custom_role(role: str, count: int = 5) -> list:
+    role_clean = role.strip()
+    role_lower = role_clean.lower()
+    
+    if "flutter" in role_lower or "android" in role_lower or "ios" in role_lower or "mobile" in role_lower:
+        base_pool = [
+            {
+                "question": f"Can you explain your experience building mobile applications, and how you manage state and lifecycle events in {role_clean}?",
+                "ideal_answer": "An ideal answer should detail specific state management patterns (like BLoC, Riverpod, or Redux), lifecycle states (initState, dispose), and write robust code for platform integrations.",
+                "keywords": ["state", "lifecycle", "bloc", "riverpod", "widget", "performance", "async"]
+            },
+            {
+                "question": f"How do you optimize rendering performance, layout layout trees, and build sizes in a {role_clean} project?",
+                "ideal_answer": "An ideal answer should cover widget rebuilding optimization, lazy loading (ListView.builder), asset compression, profiling tools (DevTools), and reducing binary footprint.",
+                "keywords": ["rendering", "rebuild", "devtools", "optimize", "layout", "performance"]
+            },
+            {
+                "question": "How do you handle local data caching, offline sync, and secure token storage in mobile clients?",
+                "ideal_answer": "An ideal answer should outline key-value stores (SharedPreferences, Hive), secure databases (SQLite, Realm), and encrypting sensitive tokens using keystores or keychains.",
+                "keywords": ["database", "sqlite", "caching", "secure", "token", "offline", "sync"]
+            },
+            {
+                "question": "Can you describe a challenging platform-specific bug you resolved, and the debugging tools you utilized?",
+                "ideal_answer": "An ideal answer should detail a specific crash or memory leak, using Logcat, Xcode Instruments, or Flutter DevTools to inspect heap allocation and isolate the leak.",
+                "keywords": ["bug", "leak", "devtools", "crash", "logcat", "xcode", "troubleshoot"]
+            },
+            {
+                "question": "How do you structure writing automated unit tests and integration tests to ensure code quality?",
+                "ideal_answer": "An ideal answer should cover writing test cases, mocking API dependencies (Mockito), testing widget interaction, and running automated CI/CD checks.",
+                "keywords": ["unit test", "integration", "mock", "test", "coverage", "assertion"]
+            }
+        ]
+    elif "web" in role_lower or "frontend" in role_lower or "react" in role_lower or "vue" in role_lower or "javascript" in role_lower:
+        base_pool = [
+            {
+                "question": f"What is your approach to modern frontend architecture, state management, and component reusability in {role_clean}?",
+                "ideal_answer": "An ideal answer should outline separating business logic from components, global stores (Redux, Pinia, Context API), and writing clean reusable UI hooks.",
+                "keywords": ["component", "hooks", "redux", "state", "architecture", "reusable"]
+            },
+            {
+                "question": "How do you optimize web application performance, including first contentful paint and layout shifts?",
+                "ideal_answer": "An ideal answer should discuss code splitting, lazy loading, image optimization, CDN distribution, and analyzing performance using Lighthouse.",
+                "keywords": ["performance", "lighthouse", "lazy", "paint", "cdn", "loading", "split"]
+            },
+            {
+                "question": "How do you secure web clients against common vulnerabilities like cross-site scripting (XSS) and CSRF?",
+                "ideal_answer": "An ideal answer should detail sanitizing user inputs, implementing Content Security Policy (CSP) headers, secure HTTP-only cookies, and CSRF tokens.",
+                "keywords": ["security", "xss", "csrf", "cookie", "csp", "sanitize", "token"]
+            },
+            {
+                "question": "Can you explain the differences between Client-Side Rendering (CSR), Server-Side Rendering (SSR), and Static Site Generation (SSG)?",
+                "ideal_answer": "An ideal answer should compare SEO advantages, initial load speeds, server resource overheads, and when to apply CSR (SPAs) vs SSR/SSG (Next.js/Nuxt).",
+                "keywords": ["ssr", "ssg", "csr", "seo", "render", "server", "static"]
+            },
+            {
+                "question": "How do you establish persistent real-time connections, and handle request retries or socket failures?",
+                "ideal_answer": "An ideal answer should contrast WebSockets with SSE, detailing socket handshakes, heartbeat keepalives, exponential backoff reconnects, and REST API fallbacks.",
+                "keywords": ["websocket", "socket", "sse", "retry", "backoff", "reconnect", "network"]
+            }
+        ]
+    elif "backend" in role_lower or "api" in role_lower or "python" in role_lower or "django" in role_lower or "node" in role_lower:
+        base_pool = [
+            {
+                "question": f"How do you design scalable RESTful APIs, and what strategies do you employ for request throttling and rate limiting in {role_clean}?",
+                "ideal_answer": "An ideal answer should cover HTTP methods, status codes, API versioning, token bucket algorithms, and Redis-backed rate limiting middleware.",
+                "keywords": ["rest", "api", "throttling", "redis", "rate limit", "scale"]
+            },
+            {
+                "question": "What database query optimization strategies do you utilize when scaling reading and writing operations?",
+                "ideal_answer": "An ideal answer should cover adding database indexes, query profiling (EXPLAIN), connection pooling, read replicas, and caching layers like Redis.",
+                "keywords": ["index", "query", "optimize", "redis", "replica", "explain", "db"]
+            },
+            {
+                "question": "How do you manage authentication and access control, such as RBAC and OAuth2, across services?",
+                "ideal_answer": "An ideal answer should explain JWT payload signing, token verification, role-based access check middleware, and secure secret key rotation.",
+                "keywords": ["auth", "jwt", "oauth2", "rbac", "token", "signature", "secret"]
+            },
+            {
+                "question": "Can you detail your experience with microservices architecture, message queues, and async task execution?",
+                "ideal_answer": "An ideal answer should cover event-driven triggers, message brokers (RabbitMQ, Kafka), asynchronous workers (Celery), and event consistency patterns.",
+                "keywords": ["microservices", "queue", "rabbitmq", "celery", "kafka", "async", "worker"]
+            },
+            {
+                "question": "How do you trace performance bottlenecks, log server errors, and set up continuous monitoring?",
+                "ideal_answer": "An ideal answer should discuss distributed tracing (OpenTelemetry), logging levels, aggregation pools (ELK, Datadog), and setting up alerts for HTTP 500 errors.",
+                "keywords": ["monitoring", "telemetry", "tracing", "logs", "metrics", "alerts", "bottleneck"]
+            }
+        ]
+    else:
+        base_pool = [
+            {
+                "question": f"What are the core technical competencies and methodologies required to succeed as a {role_clean}?",
+                "ideal_answer": f"An ideal answer should detail specific domain skills, design principles, and industry frameworks related directly to working as a {role_clean}.",
+                "keywords": ["methodology", "framework", "competency", "standards", "role"]
+            },
+            {
+                "question": f"Can you outline a challenging project or objective you delivered in your capacity as a {role_clean}?",
+                "ideal_answer": "An ideal answer should follow the STAR method (Situation, Task, Action, Result), explaining concrete technical challenges and metric-driven results.",
+                "keywords": ["challenge", "star", "delivery", "project", "metrics", "result"]
+            },
+            {
+                "question": f"How do you prioritize deliverables, manage stakeholder expectations, and handle scope changes in a {role_clean} role?",
+                "ideal_answer": "An ideal answer should cover prioritization frameworks (Eisenhower matrix, MoSCoW), clear communication channels, and agile sprint adjustments.",
+                "keywords": ["prioritize", "communication", "stakeholder", "agile", "scope", "planning"]
+            },
+            {
+                "question": f"What tools, diagnostics, or platforms do you rely on daily to maintain high output as a {role_clean}?",
+                "ideal_answer": "An ideal answer should list specific industry software, development tools, or testing frameworks, explaining how they increase productivity.",
+                "keywords": ["tools", "platform", "software", "efficiency", "workflow", "output"]
+            },
+            {
+                "question": "How do you stay updated with emerging tech trends, standards, and best practices in your field?",
+                "ideal_answer": "An ideal answer should cover reading research papers, tech blogs, attending conferences, contributing to open source, or participating in continuous training.",
+                "keywords": ["learning", "trends", "standards", "best practices", "research", "blogs"]
+            }
+        ]
+    
+    # Check if OpenAI can generate questions dynamically
+    api_key = os.getenv("OPENAI_API_KEY")
+    if api_key:
+        try:
+            import httpx
+            prompt = (
+                f"Generate {count} professional, technical interview questions for the role: '{role_clean}'.\n"
+                f"For each question, provide:\n"
+                f"1. The question text.\n"
+                f"2. A 2-3 sentence 'ideal_answer' detailing the concepts the candidate should address.\n"
+                f"3. A list of 4-6 specific technical 'keywords' that should be matched.\n\n"
+                f"Output exactly in valid JSON array format, where each object is:\n"
+                f"{{\n"
+                f"  \"question\": \"...\",\n"
+                f"  \"ideal_answer\": \"...\",\n"
+                f"  \"keywords\": [\"word1\", \"word2\", ...]\n"
+                f"}}\n"
+                f"Output only the raw JSON array. Do not wrap in markdown or other text."
+            )
+            response = httpx.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "gpt-3.5-turbo",
+                    "messages": [
+                        {"role": "system", "content": "You are a professional technical recruiter generating interview questions."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 0.5,
+                    "max_tokens": 1000
+                },
+                timeout=7.0
+            )
+            if response.status_code == 200:
+                res_data = response.json()["choices"][0]["message"]["content"].strip()
+                if res_data.startswith("```"):
+                    parts = res_data.split("```")
+                    res_data = parts[1]
+                    if res_data.startswith("json"):
+                        res_data = res_data[4:]
+                return json.loads(res_data.strip())
+        except Exception as e:
+            print(f"OpenAI question generation failed, falling back to local templates: {e}")
+            
+    import random
+    selected = random.sample(base_pool, min(len(base_pool), count))
+    return selected
+
 @app.post("/api/session", response_model=SessionResponse)
 def create_session(session_data: SessionCreate):
     session_id = str(uuid.uuid4())
@@ -67,36 +249,41 @@ def create_session(session_data: SessionCreate):
     if session_data.custom_questions and len(session_data.custom_questions) > 0:
         questions = session_data.custom_questions
         ideal_answers = ["" for _ in questions]
+        custom_keywords = {}
     else:
-        # Retrieve question pool for the category (or generic fallback)
+        # Retrieve question pool for the category
         pool = QUESTIONS_POOL.get(session_data.category)
+        is_custom = False
         if not pool:
-            # Fallback to General Practice
-            pool = QUESTIONS_POOL.get("General Practice", [])
+            is_custom = True
+            # Dynamically generate questions specifically for this custom category/role!
+            pool = generate_questions_for_custom_role(session_data.category, 10)
+            QUESTIONS_POOL[session_data.category] = pool
         
-        # Ensure we have at least 50 questions in the pool to satisfy the "at least 50 questions in the queue" requirement.
-        # If pool size is less than 50, we combine it with General Practice questions to reach at least 50.
-        # We copy to prevent mutating the original global dict pool
-        pool = list(pool)
-        if len(pool) < 50:
-            fallback_pool = QUESTIONS_POOL.get("General Practice", [])
-            existing_questions = {q["question"] for q in pool}
-            for q in fallback_pool:
-                if q["question"] not in existing_questions:
-                    pool.append(q)
-                if len(pool) >= 50:
-                    break
+        # Ensure we have at least 50 questions in the pool to satisfy the queue requirement
+        if not is_custom:
+            pool = list(pool)
+            if len(pool) < 50:
+                fallback_pool = QUESTIONS_POOL.get("General Practice", [])
+                existing_questions = {q["question"] for q in pool}
+                for q in fallback_pool:
+                    if q["question"] not in existing_questions:
+                        pool.append(q)
+                    if len(pool) >= 50:
+                        break
         
         # Randomly select requested number of unique questions from the pool
         sampled = random.sample(pool, min(len(pool), count))
         questions = [q["question"] for q in sampled]
         ideal_answers = [q.get("ideal_answer", "") for q in sampled]
+        custom_keywords = {q["question"]: q.get("keywords", []) for q in sampled if "question" in q}
     
     active_sessions[session_id] = {
         "category": session_data.category,
         "questions": questions,
         "answers": ["" for _ in range(len(questions))],
         "ideal_answers": ideal_answers,
+        "custom_keywords": custom_keywords,
         "frames": [],
         "speech": [],
         "emotions": [],
@@ -330,7 +517,20 @@ def forgot_password(req: ForgotPasswordRequest):
     print(f" OTP GENERATED FOR {req.email}: {otp}")
     print(f"==========================================\n")
     
-    return {"status": "success", "message": "OTP generated successfully", "otp": otp}
+    # Import email services
+    from app.services.email import send_otp_email
+    
+    # Attempt to dispatch SMTP email
+    email_sent = send_otp_email(req.email, otp)
+    
+    if email_sent:
+        return {"status": "success", "message": "OTP sent to your Gmail address successfully", "otp": "sent"}
+    else:
+        return {
+            "status": "success",
+            "message": "OTP generated. (Gmail SMTP not configured. OTP printed in backend console)",
+            "otp": otp
+        }
 
 @app.post("/api/auth/reset-password")
 def reset_password(req: ResetPasswordRequest):

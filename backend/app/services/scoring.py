@@ -126,7 +126,8 @@ def calculate_final_scores(session_history: Dict[str, Any]) -> Dict[str, Any]:
     questions = session_history.get("questions", [])
     answers = session_history.get("answers", [])
     ideal_answers = session_history.get("ideal_answers", [])
-    evals = evaluate_answers(questions, answers, ideal_answers)
+    custom_keywords = session_history.get("custom_keywords", {})
+    evals = evaluate_answers(questions, answers, ideal_answers, custom_keywords)
     avg_quality = sum(e["quality_score"] for e in evals) / len(evals) if evals else 80.0
 
     gesture_score = int((1.0 - fidget_ratio) * 100)
@@ -552,7 +553,7 @@ def generate_local_ideal_answer(q: str) -> str:
     
     return "The response should demonstrate key industry knowledge, clear articulation of technical steps, and structured examples from prior experience."
 
-def evaluate_answers(questions: list, answers: list, ideal_answers: list = None) -> list:
+def evaluate_answers(questions: list, answers: list, ideal_answers: list = None, custom_keywords: dict = None) -> list:
     import httpx
     import re
     evals = []
@@ -631,15 +632,19 @@ def evaluate_answers(questions: list, answers: list, ideal_answers: list = None)
 
         # 2. Extract keywords for this question
         keywords = []
-        clean_q_target = re.sub(r"[^a-zA-Z0-9]", "", q).lower().strip()
-        for cat_list in QUESTIONS_POOL.values():
-            for item in cat_list:
-                clean_item_q = re.sub(r"[^a-zA-Z0-9]", "", item.get("question", "")).lower().strip()
-                if clean_item_q == clean_q_target:
-                    keywords = item.get("keywords", [])
+        if custom_keywords and q in custom_keywords:
+            keywords = custom_keywords[q]
+            
+        if not keywords:
+            clean_q_target = re.sub(r"[^a-zA-Z0-9]", "", q).lower().strip()
+            for cat_list in QUESTIONS_POOL.values():
+                for item in cat_list:
+                    clean_item_q = re.sub(r"[^a-zA-Z0-9]", "", item.get("question", "")).lower().strip()
+                    if clean_item_q == clean_q_target:
+                        keywords = item.get("keywords", [])
+                        break
+                if keywords:
                     break
-            if keywords:
-                break
         
         if not keywords:
             clean_ideal_words = [w.strip(".,;:?!()\"'").lower() for w in ideal_ans.split()]
